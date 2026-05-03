@@ -70,7 +70,6 @@ if not st.session_state.logged_in:
         st.image(LOGO_URL, use_container_width=True)
         tab1, tab2 = st.tabs(["🔐 Giriş Yap", "📝 Personel Kaydı"])
         with tab1:
-            # KEY EKLENDİ
             u_name = st.text_input("Kullanıcı Adı", key="login_user")
             u_pass = st.text_input("Şifre", type="password", key="login_pass")
             if st.button("Sisteme Giriş", use_container_width=True):
@@ -88,7 +87,6 @@ if not st.session_state.logged_in:
                     else: st.error("Giriş bilgileri hatalı!")
         with tab2:
             st.info("Yeni personel hesabı.")
-            # KEY EKLENDİ (HATAYI VEREN YER BURASIYDI)
             new_u = st.text_input("Kullanıcı Adı", key="register_user")
             new_p = st.text_input("Şifre", type="password", key="register_pass")
             if st.button("Kayıt Ol", use_container_width=True):
@@ -109,8 +107,8 @@ else:
         st.write(f"👤 **{st.session_state.username} ({st.session_state.user_type})**")
         st.divider()
         
-        # KEY EKLENDİ
-        search_query = st.text_input("🔍 İlan Ara (No veya Başlık)", placeholder="Örn: 123456", key="main_search")
+        # GÜVENLİ ARAMA KUTUSU
+        search_query = st.text_input("🔍 İlan No Ara", placeholder="Örn: 123456", key="main_search")
         
         st.divider()
         menu_items = {
@@ -128,18 +126,30 @@ else:
             st.session_state.logged_in = False
             st.rerun()
 
-    # ARAMA SONUCU
+    # --- ÖZELLİK: GÜVENLİ ARAMA MANTIĞI ---
     if search_query:
-        st.title(f"🔎 '{search_query}' İçin Sonuçlar")
+        st.title(f"🔎 Sonuçlar: {search_query}")
+        # Sadece kendine ait ID'leri ve seninle paylaşılan ID'leri al
+        kendi_idleri = df_all[df_all['Sahip'] == st.session_state.username]['ID'].tolist()
+        paylasilan_idleri = pay_all[pay_all['Paylasilan'] == st.session_state.username]['IlanID'].astype(str).tolist()
+        yetkili_idleri = list(set(kendi_idleri + paylasilan_idleri))
+
+        # Arama yaparken bu yetkili ID'ler dışına çıkma
         results = df_all[
-            (df_all['P_No'].astype(str).str.contains(search_query)) | 
-            (df_all['Baslik'].str.contains(search_query, case=False))
+            (df_all['ID'].astype(str).isin(yetkili_idleri)) & 
+            (df_all['P_No'].astype(str).str.contains(search_query))
         ]
+
         if not results.empty:
             for _, r in results.iterrows():
-                st.markdown(f'<div class="property-card"><span class="p-no">No: {r["P_No"]}</span><br><b>{r["Baslik"]}</b> | {r["Fiyat"]} TL<br><small>📍 {r["Konum"]} | 👤 Sahibi: {r["Sahip"]}</small></div>', unsafe_allow_html=True)
+                durum = "Kendi İlanın" if r['Sahip'] == st.session_state.username else "Seninle Paylaşılan"
+                st.markdown(f"""<div class="property-card">
+                    <span class="p-no">No: {r['P_No']}</span> | <small>{durum}</small><br>
+                    <b>{r['Baslik']}</b> | {r['Fiyat']} TL<br>
+                    <small>📍 {r['Konum']}</small>
+                </div>""", unsafe_allow_html=True)
         else:
-            st.warning("Eşleşen ilan bulunamadı.")
+            st.warning("Görme yetkiniz olan böyle bir ilan bulunamadı.")
         st.divider()
 
     # 1. BENİM PORTFÖYÜM
@@ -159,8 +169,10 @@ else:
                     </div>""", unsafe_allow_html=True)
                     
                     c1, c2 = st.columns([1, 3])
-                    if c1.button("🗑️ Sil", key=f"d_{r['ID']}"):
+                    if c1.button("🗑️ İlanı Sil", key=f"d_{r['ID']}"):
                         df_all[df_all['ID'] != r['ID']].to_csv(DB_FILE, index=False)
+                        # Paylaşımları da temizle (ilan silinince kimse görmesin)
+                        pay_all[pay_all['IlanID'] != r['ID']].to_csv(SHARED_FILE, index=False)
                         st.rerun()
                     
                     with c2:
@@ -173,24 +185,30 @@ else:
                                     pd.concat([pay_all, pd.DataFrame([{"IlanID": r['ID'], "Paylasan": st.session_state.username, "Paylasilan": target}])]).to_csv(SHARED_FILE, index=False)
                                     st.success(f"{target} personeline iletildi!")
 
-    # 2. PAYLAŞILAN İLANLAR
+    # 2. PAYLAŞILAN İLANLAR (TEMİZLEME ÖZELLİĞİ EKLENDİ)
     elif secim == "paylasilan":
         st.title("🔗 Gelen Paylaşımlar")
-        id_list = pay_all[pay_all['Paylasilan'] == st.session_state.username]['IlanID'].astype(str).tolist()
-        p_df = df_all[df_all['ID'].astype(str).isin(id_list)]
+        my_shares = pay_all[pay_all['Paylasilan'] == st.session_state.username]
         
-        if p_df.empty:
+        if my_shares.empty:
             st.info("Sizinle henüz ilan paylaşılmadı.")
         else:
-            for i, r in p_df.iloc[::-1].iterrows():
-                p_info = pay_all[pay_all['IlanID'].astype(str) == str(r['ID'])]
-                p_kisi = p_info['Paylasan'].values[0] if not p_info.empty else "Bilinmiyor"
-                st.markdown(f"""<div class="share-card">
-                    <span class="p-no">No: {r['P_No']}</span><br>
-                    <b>{r['Baslik']}</b> | <span style="color:green;">{r['Fiyat']} TL</span><br>
-                    <small>📍 {r['Konum']} | 👤 Gönderen: {p_kisi}</small><br>
-                    <p style='font-size:14px; margin-top:5px;'>{r['Aciklama']}</p>
-                </div>""", unsafe_allow_html=True)
+            for i, p_row in my_shares.iloc[::-1].iterrows():
+                r = df_all[df_all['ID'].astype(str) == str(p_row['IlanID'])]
+                if not r.empty:
+                    r = r.iloc[0]
+                    with st.container():
+                        st.markdown(f"""<div class="share-card">
+                            <span class="p-no">No: {r['P_No']}</span><br>
+                            <b>{r['Baslik']}</b> | <span style="color:green;">{r['Fiyat']} TL</span><br>
+                            <small>📍 {r['Konum']} | 👤 Gönderen: {p_row['Paylasan']}</small>
+                        </div>""", unsafe_allow_html=True)
+                        
+                        # ÖZELLİK: PAYLAŞILANLARIN İÇİNDEN TEMİZLEME
+                        if st.button("❌ Listemden Kaldır", key=f"clr_{p_row['IlanID']}_{i}"):
+                            # Sadece bu paylaşım satırını dosyadan çıkar
+                            pay_all.drop(i).to_csv(SHARED_FILE, index=False)
+                            st.rerun()
 
     # 3. YENİ İLAN EKLE
     elif secim == "ekle":
@@ -212,7 +230,7 @@ else:
                 d = st.date_input("Gün"); s = st.time_input("Saat"); m = st.text_input("Müşteri")
                 ilan_sec = [f"{row['P_No']} - {row['Baslik']}" for _, row in df_all.iterrows()]
                 secilen = st.selectbox("İlgili Portföy", ilan_sec)
-                n = st.text_area("Randevu Notları", placeholder="Müşteri pazarlığa açık, kredi bekliyor vb.")
+                n = st.text_area("Randevu Notları", placeholder="Notunuzu buraya yazın...")
                 
                 if st.form_submit_button("Randevuyu Kaydet"):
                     y_r = pd.DataFrame([{"Ekleyen": st.session_state.username, "Tarih": str(d), "Saat": str(s), "Musteri": m, "Ilan_No": secilen.split(" - ")[0], "Notlar": n}])
