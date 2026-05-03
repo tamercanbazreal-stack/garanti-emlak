@@ -7,20 +7,15 @@ import hashlib
 # 1. SAYFA AYARLARI
 st.set_page_config(page_title="GARANTİ EMLAK | Kurumsal Panel", page_icon="🏢", layout="wide")
 
-# Veritabanı Dosyaları
+# Logo URL (Daha önce kullandığımız logo)
+LOGO_URL = "https://i.hizliresim.com/iwyt3qr.png"
 DB_FILE = "ilanlar_v2.csv"
 USER_FILE = "kullanicilar.csv"
 
-# 2. GÜVENLİK VE ŞİFRELEME
+# 2. GÜVENLİK VE VERİ FONKSİYONLARI
 def make_hashes(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
 
-def check_hashes(password, hashed_text):
-    if make_hashes(password) == hashed_text:
-        return hashed_text
-    return False
-
-# 3. VERİ YÖNETİMİ
 def verileri_yukle():
     if os.path.exists(DB_FILE):
         return pd.read_csv(DB_FILE)
@@ -37,185 +32,197 @@ def format_para(sayi):
         return f"{temiz_sayi:,}".replace(",", ".")
     except: return sayi
 
-# 4. TASARIM (CSS)
-st.markdown("""
+# 3. GELİŞMİŞ ANİMASYONLU TASARIM (CSS)
+st.markdown(f"""
     <style>
-    .main { background-color: #f5f7f9; }
-    .stSidebar { background-color: #1e293b !important; color: white !important; }
-    .stSidebar [data-testid="stMarkdownContainer"] p { color: white !important; font-weight: 600; }
+    /* Arkaplan ve Genel */
+    .stApp {{ background-color: #f8fafc; }}
     
-    .user-badge {
-        padding: 5px 12px;
-        border-radius: 20px;
-        background-color: #e2e8f0;
-        color: #475569;
-        font-size: 12px;
-        font-weight: bold;
-        margin-bottom: 20px;
-        display: inline-block;
-    }
-    
-    .property-card {
+    /* Giriş Ekranı Animasyonu */
+    @keyframes fadeIn {{
+        from {{ opacity: 0; transform: translateY(20px); }}
+        to {{ opacity: 1; transform: translateY(0); }}
+    }}
+    .login-container {{
+        animation: fadeIn 0.8s ease-out;
+    }}
+
+    /* Kart Animasyonları */
+    .property-card {{
         background: white;
-        padding: 20px;
-        border-radius: 12px;
+        padding: 22px;
+        border-radius: 15px;
         box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-        margin-bottom: 15px;
-        border-left: 6px solid #10b981;
-    }
+        margin-bottom: 20px;
+        border-left: 8px solid #8CC63F;
+        transition: all 0.3s ease;
+    }}
+    .property-card:hover {{
+        transform: scale(1.02);
+        box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2);
+        border-left: 8px solid #4b8a00;
+    }}
+
+    /* Sidebar Tasarımı */
+    .stSidebar {{ background-color: #0f172a !important; }}
+    .stSidebar [data-testid="stMarkdownContainer"] p {{ color: #e2e8f0 !important; }}
+    
+    /* Buton Animasyonları */
+    .stButton>button {{
+        transition: all 0.2s ease;
+        border-radius: 10px;
+        font-weight: bold;
+    }}
+    .stButton>button:hover {{
+        background-color: #8CC63F !important;
+        color: white !important;
+        transform: translateY(-2px);
+    }}
+
+    /* Web Tapu Kartı Animasyonu */
+    .tapu-card {{
+        background: linear-gradient(135deg, #004a99, #002d5c);
+        color: white;
+        padding: 30px;
+        border-radius: 20px;
+        text-align: center;
+        transition: transform 0.4s;
+    }}
+    .tapu-card:hover {{ transform: rotate(1deg); }}
     </style>
     """, unsafe_allow_html=True)
 
-# 5. OTURUM YÖNETİMİ
+# 4. OTURUM KONTROLÜ
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user_type = None
     st.session_state.username = None
 
-# --- GİRİŞ VE KAYIT EKRANI ---
+# --- GİRİŞ EKRANI (Logo ve Animasyon) ---
 if not st.session_state.logged_in:
-    cols = st.columns([1, 2, 1])
-    with cols[1]:
-        st.image("https://i.hizliresim.com/iwyt3qr.png", width=200)
-        tab1, tab2 = st.tabs(["🔐 Giriş Yap", "📝 Personel Kaydı"])
+    st.markdown('<div class="login-container">', unsafe_allow_html=True)
+    c1, c2, c3 = st.columns([1, 1.5, 1])
+    with c2:
+        st.image(LOGO_URL, use_container_width=True)
+        st.markdown("<h2 style='text-align:center; color:#1e293b;'>Personel Giriş Paneli</h2>", unsafe_allow_html=True)
+        
+        tab1, tab2 = st.tabs(["🔐 Oturum Aç", "📝 Personel Kayıt"])
         
         with tab1:
-            u_name = st.text_input("Kullanıcı Adı", key="login_user")
-            u_pass = st.text_input("Şifre", type="password", key="login_pass")
-            if st.button("Sisteme Gir"):
-                users = kullanicilari_yukle()
-                hashed_pswd = make_hashes(u_pass)
-                
-                # Admin Kontrolü
+            u_name = st.text_input("Kullanıcı Adı")
+            u_pass = st.text_input("Şifre", type="password")
+            if st.button("Giriş Yap"):
                 if u_name == "admin" and u_pass == "3363Garanti":
                     st.session_state.logged_in = True
                     st.session_state.user_type = "Yönetici"
                     st.session_state.username = "admin"
                     st.rerun()
-                
-                # Personel Kontrolü
-                user_record = users[(users['Kullanici'] == u_name) & (users['Sifre'] == hashed_pswd)]
-                if not user_record.empty:
-                    st.session_state.logged_in = True
-                    st.session_state.user_type = "Danışman"
-                    st.session_state.username = u_name
-                    st.rerun()
                 else:
-                    st.error("Hatalı giriş!")
-
-        with tab2:
-            new_user = st.text_input("Yeni Kullanıcı Adı")
-            new_pass = st.text_input("Yeni Şifre", type="password")
-            confirm_pass = st.text_input("Şifre Tekrar", type="password")
-            if st.button("Kaydı Tamamla"):
-                if new_pass == confirm_pass:
                     users = kullanicilari_yukle()
-                    if new_user in users['Kullanici'].values or new_user == "admin":
-                        st.warning("Bu kullanıcı adı zaten alınmış.")
+                    hashed_pswd = make_hashes(u_pass)
+                    user_record = users[(users['Kullanici'] == u_name) & (users['Sifre'] == hashed_pswd)]
+                    if not user_record.empty:
+                        st.session_state.logged_in = True
+                        st.session_state.user_type = "Danışman"
+                        st.session_state.username = u_name
+                        st.rerun()
+                    else:
+                        st.error("❌ Hatalı Kullanıcı Adı veya Şifre")
+        
+        with tab2:
+            new_user = st.text_input("Yeni Personel Kullanıcı Adı")
+            new_pass = st.text_input("Yeni Personel Şifresi", type="password")
+            if st.button("Kaydı Onayla"):
+                if len(new_pass) < 4:
+                    st.error("Şifre çok kısa!")
+                else:
+                    users = kullanicilari_yukle()
+                    if new_user in users['Kullanici'].values:
+                        st.warning("Bu isimde bir personel zaten kayıtlı.")
                     else:
                         new_data = {"Kullanici": new_user, "Sifre": make_hashes(new_pass), "Yetki": "Danışman"}
                         users = pd.concat([users, pd.DataFrame([new_data])], ignore_index=True)
                         users.to_csv(USER_FILE, index=False)
-                        st.success("Kaydınız oluşturuldu. Giriş yapabilirsiniz.")
-                else:
-                    st.error("Şifreler uyuşmuyor!")
+                        st.success("✅ Kayıt başarılı! Giriş sekmesine geçebilirsiniz.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # --- ANA PANEL ---
 else:
     with st.sidebar:
-        st.markdown(f"### 🏢 GARANTİ EMLAK")
-        st.markdown(f"<div class='user-badge'>{st.session_state.user_type}: {st.session_state.username}</div>", unsafe_allow_html=True)
-        
-        # MENÜ TASARIMI
+        st.image(LOGO_URL, use_container_width=True)
+        st.markdown(f"<div style='text-align:center; color:white;'><b>{st.session_state.user_type}</b><br>{st.session_state.username}</div>", unsafe_allow_html=True)
         st.markdown("---")
-        menu = st.radio("ANA MENÜ", 
-                        ["📋 İlan Portföyü", "➕ İlan Ekle", "🗺️ Web Tapu", "🚪 Oturumu Kapat"])
-        
-        if st.session_state.user_type == "Yönetici":
-            st.markdown("---")
-            admin_menu = st.checkbox("⚙️ Yönetim Paneli")
+        menu = st.radio("DASHBOARD", ["📋 Portföyüm", "➕ Yeni İlan Ekle", "📄 Web Tapu", "🚪 Güvenli Çıkış"])
 
-    # 1. İLAN PORTFÖYÜ
-    if menu == "📋 İlan Portföyü":
-        st.title("🏡 Gayrimenkul Portföyü")
+    # 1. PORTFÖYÜM (Animasyonlu Kartlar)
+    if menu == "📋 Portföyüm":
+        st.title("🏡 Gayrimenkul Listesi")
         df = verileri_yukle()
         
-        # Filtreleme: Admin her şeyi görür, personel sadece kendi ilanlarını
-        if st.session_state.user_type == "Danışman":
-            user_df = df[df['Sahip'] == st.session_state.username]
-            st.info(f"Kendi portföyünüzde {len(user_df)} ilan listeleniyor.")
-        else:
-            user_df = df
-            st.info(f"Sistem genelinde toplam {len(user_df)} ilan bulunuyor.")
-
-        if not user_df.empty:
-            for i, r in user_df.iloc[::-1].iterrows():
-                with st.container():
-                    st.markdown(f"""
-                    <div class="property-card">
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="color:#666; font-size:12px;">👤 Ekleyen: {r['Sahip']} | 📅 {r['Tarih']}</span>
-                            <span style="color:#10b981; font-weight:bold; font-size:20px;">{r['Fiyat']} TL</span>
-                        </div>
-                        <h3 style="margin: 10px 0;">{r['Baslik']}</h3>
-                        <p style="color:#475569;">📍 {r['Konum']}</p>
-                        <p style="font-size:14px; color:#1e293b; background:#f1f5f9; padding:10px; border-radius:5px;">{r['Aciklama']}</p>
+        # Filtreleme
+        display_df = df if st.session_state.user_type == "Yönetici" else df[df['Sahip'] == st.session_state.username]
+        
+        if not display_df.empty:
+            for i, r in display_df.iloc[::-1].iterrows():
+                st.markdown(f"""
+                <div class="property-card">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="font-size:12px; color:#64748b;">👤 Danışman: {r['Sahip']} | 📅 {r['Tarih']}</span>
+                        <span style="font-size:22px; color:#4b8a00; font-weight:800;">{r['Fiyat']} TL</span>
                     </div>
-                    """, unsafe_allow_html=True)
-                    if st.button(f"İlanı Sil / Satıldı", key=f"del_{r['ID']}"):
-                        df = df.drop(i)
-                        df.to_csv(DB_FILE, index=False)
-                        st.rerun()
+                    <h3 style="margin:10px 0; color:#0f172a;">{r['Baslik']}</h3>
+                    <p style="color:#334155; font-weight:600;">📍 {r['Konum']}</p>
+                    <div style="background:#f8fafc; padding:12px; border-radius:8px; color:#475569; font-size:14px;">
+                        {r['Aciklama']}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button(f"İlanı Sil / Satıldı ✅", key=f"del_{r['ID']}"):
+                    df = df.drop(i)
+                    df.to_csv(DB_FILE, index=False)
+                    st.rerun()
         else:
-            st.write("Henüz ilan eklenmemiş.")
+            st.info("Henüz eklenmiş bir ilan bulunmuyor.")
 
-    # 2. İLAN EKLE
-    elif menu == "➕ İlan Ekle":
-        st.title("Yeni Portföy Girişi")
-        with st.form("ilan_form"):
+    # 2. YENİ İLAN EKLE
+    elif menu == "➕ Yeni İlan Ekle":
+        st.title("Yeni İlan Kaydı")
+        with st.form("ilan_form", clear_on_submit=True):
             c1, c2 = st.columns(2)
             with c1:
                 baslik = st.text_input("İlan Başlığı")
-                fiyat = st.text_input("Fiyat")
+                fiyat = st.text_input("Fiyat (TL)")
             with c2:
-                konum = st.text_input("Mahalle / Bölge")
+                konum = st.text_input("Konum (Mahalle/Sokak)")
                 tarih = st.date_input("Kayıt Tarihi")
             
             aciklama = st.text_area("İlan Detayları")
-            
-            if st.form_submit_button("Portföye Kaydet"):
+            if st.form_submit_button("İlanı Yayına Al"):
                 df = verileri_yukle()
                 yeni_id = datetime.now().strftime("%Y%m%d%H%M%S")
                 yeni_veri = {
-                    "ID": yeni_id,
-                    "Sahip": st.session_state.username,
-                    "Tarih": tarih.strftime("%d/%m/%Y"),
-                    "Baslik": baslik,
-                    "Fiyat": format_para(fiyat),
-                    "Konum": konum,
-                    "Aciklama": aciklama
+                    "ID": yeni_id, "Sahip": st.session_state.username, 
+                    "Tarih": tarih.strftime("%d/%m/%Y"), "Baslik": baslik, 
+                    "Fiyat": format_para(fiyat), "Konum": konum, "Aciklama": aciklama
                 }
                 df = pd.concat([df, pd.DataFrame([yeni_veri])], ignore_index=True)
                 df.to_csv(DB_FILE, index=False)
-                st.success("İlan başarıyla kendi portföyünüze eklendi!")
+                st.success("İlan başarıyla eklendi!")
 
-    # 3. WEB TAPU
-    elif menu == "🗺️ Web Tapu":
-        st.title("Tapu İşlemleri")
-        st.link_button("🌐 Web Tapu Portal", "https://webtapu.tkgm.gov.tr/")
-        st.link_button("🗺️ Parsel Sorgulama", "https://parselsorgu.tkgm.gov.tr/")
+    # 3. WEB TAPU (Efektli)
+    elif menu == "📄 Web Tapu":
+        st.markdown("""
+        <div class="tapu-card">
+            <h2>WEB TAPU PORTALI</h2>
+            <p>Taşınmaz işlemleriniz için resmi bağlantıları kullanın.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.write("")
+        c1, c2 = st.columns(2)
+        c1.link_button("🌐 Web Tapu Giriş", "https://webtapu.tkgm.gov.tr/")
+        c2.link_button("📍 Parsel Sorgulama", "https://parselsorgu.tkgm.gov.tr/")
 
-    # 4. YÖNETİCİ ÖZEL PANELİ
-    if st.session_state.user_type == "Yönetici" and admin_menu:
-        st.divider()
-        st.subheader("👥 Personel Yönetimi")
-        users = kullanicilari_yukle()
-        st.dataframe(users[["Kullanici", "Yetki"]], use_container_width=True)
-        if st.button("Tüm İlanları Sıfırla (Kritik)"):
-            if os.path.exists(DB_FILE): os.remove(DB_FILE)
-            st.rerun()
-
-    # 5. ÇIKIŞ
-    if menu == "🚪 Oturumu Kapat":
+    # 4. ÇIKIŞ
+    elif menu == "🚪 Güvenli Çıkış":
         st.session_state.logged_in = False
         st.rerun()
