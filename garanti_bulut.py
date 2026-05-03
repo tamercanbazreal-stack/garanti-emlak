@@ -27,12 +27,10 @@ def verileri_yukle(dosya, sutunlar):
             df = pd.read_csv(dosya)
             for col in sutunlar:
                 if col not in df.columns:
-                    # 'CanAdd' sütunu yoksa varsayılan True olarak ekle
                     df[col] = True if col == "CanAdd" else ""
             return df
         except:
             return pd.DataFrame(columns=sutunlar)
-    # İlk kurulumda admini de ekleyelim
     return pd.DataFrame(columns=sutunlar)
 
 def format_para(sayi):
@@ -51,7 +49,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 4. OTURUM VE VERİ YÜKLEME
+# 4. OTURUM YÖNETİMİ
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'show_detail' not in st.session_state: st.session_state.show_detail = {}
 
@@ -70,13 +68,10 @@ if not st.session_state.logged_in:
                 users = verileri_yukle(USER_FILE, ["Kullanici", "Sifre", "Yetki", "CanAdd"])
                 user_match = users[(users['Kullanici'] == u_name) & (users['Sifre'] == make_hashes(u_pass))]
                 if not user_match.empty:
-                    st.session_state.logged_in = True
-                    st.session_state.user_type = user_match.iloc[0]['Yetki']
-                    st.session_state.username = u_name
-                    # İlan ekleme yetkisini session'a alalım
+                    st.session_state.logged_in, st.session_state.user_type, st.session_state.username = True, user_match.iloc[0]['Yetki'], u_name
                     st.session_state.can_add = str(user_match.iloc[0]['CanAdd']) == "True"
                     st.rerun()
-                else: st.error("Hatalı Bilgi!")
+                else: st.error("Hatalı Giriş!")
 
 # --- ANA PANEL ---
 else:
@@ -84,7 +79,6 @@ else:
     pay_all = verileri_yukle(SHARED_FILE, ["IlanID", "Paylasan", "Paylasilan"])
     users_df = verileri_yukle(USER_FILE, ["Kullanici", "Sifre", "Yetki", "CanAdd"])
 
-    # Danışmanın güncel yetkisini kontrol et
     if st.session_state.username != "admin":
         curr_user = users_df[users_df['Kullanici'] == st.session_state.username]
         st.session_state.can_add = str(curr_user.iloc[0]['CanAdd']) == "True"
@@ -96,19 +90,15 @@ else:
         st.divider()
         
         menu_items = {"📋 Portföyüm": "portfoy", "🔗 Gelenler": "paylasilan"}
-        
-        # Sadece admin veya yetkisi olan danışman İlan Ekle menüsünü görür
         if st.session_state.user_type == "Yönetici" or st.session_state.can_add:
             menu_items["➕ İlan Ekle"] = "ekle"
-            
         menu_items["📅 Randevular"] = "randevu"
-        
         if st.session_state.user_type == "Yönetici":
             menu_items["🌐 Şirket Portföyü"] = "all_port"
             menu_items["⚙️ Admin Panel"] = "admin"
             
         secim = menu_items[st.radio("MENÜ", list(menu_items.keys()))]
-        if st.button("🚪 Güvenli Çıkış"):
+        if st.button("🚪 Çıkış"):
             st.session_state.logged_in = False
             st.rerun()
 
@@ -123,23 +113,19 @@ else:
             
             c1, c2, c3 = st.columns([1, 1, 2])
             detay_key = f"det_{r['ID']}"
-            
             if c1.button("Kapat" if st.session_state.show_detail.get(detay_key) else "🔍 Detay", key=detay_key):
                 st.session_state.show_detail[detay_key] = not st.session_state.show_detail.get(detay_key)
                 st.rerun()
-            
             if c2.button("🗑️ Sil", key=f"del_{r['ID']}"):
                 df_all[df_all['ID'].astype(str) != str(r['ID'])].to_csv(DB_FILE, index=False)
                 st.rerun()
-            
             if not admin_modu:
                 with c3:
                     with st.expander("🔗 Paylaş"):
-                        target = st.selectbox("Gönderilecek Personel:", [u for u in users_df['Kullanici'] if u != st.session_state.username], key=f"sel_{r['ID']}")
+                        target = st.selectbox("Personel:", [u for u in users_df['Kullanici'] if u != st.session_state.username], key=f"sel_{r['ID']}")
                         if st.button("Gönder", key=f"snd_{r['ID']}"):
                             pd.concat([pay_all, pd.DataFrame([{"IlanID": r['ID'], "Paylasan": st.session_state.username, "Paylasilan": target}])]).to_csv(SHARED_FILE, index=False)
                             st.success("Gönderildi!")
-
             if st.session_state.show_detail.get(detay_key):
                 st.markdown(f'<div class="detail-box"><b>📝 NOTLAR:</b><br>{r["Aciklama"]}</div>', unsafe_allow_html=True)
 
@@ -158,69 +144,61 @@ else:
         ilan_listele(df_all, admin_modu=True)
 
     elif secim == "ekle":
-        st.title("➕ Yeni İlan Ekle")
+        st.title("➕ Yeni İlan")
         with st.form("add_form"):
             b = st.text_input("İlan Başlığı *")
             f = st.text_input("Fiyat *")
-            k = st.text_input("Konum/Adres *")
-            a = st.text_area("İlan Notları/Detaylar *")
-            submit = st.form_submit_button("Portföye Ekle")
-            
-            if submit:
-                # BOŞ ALAN KONTROLÜ
+            k = st.text_input("Konum *")
+            a = st.text_area("Notlar *")
+            if st.form_submit_button("Portföye Ekle"):
                 if not b or not f or not k or not a:
                     st.error("⚠️ HATA: Tüm alanları doldurmak zorunludur! Boş ilan eklenemez.")
                 else:
                     yeni = {"ID": datetime.now().strftime("%Y%m%d%H%M%S"), "P_No": portfoy_no_uret(), "Sahip": st.session_state.username, "Tarih": datetime.now().strftime("%d/%m/%Y"), "Baslik": b, "Fiyat": format_para(f), "Konum": k, "Aciklama": a}
                     pd.concat([df_all, pd.DataFrame([yeni])]).to_csv(DB_FILE, index=False)
-                    st.success(f"✅ Başarılı! İlan NO: {yeni['P_No']}")
+                    st.success(f"✅ İlan Portföye Eklendi! NO: {yeni['P_No']}")
+
+    elif secim == "randevu":
+        st.title("📅 Randevu Takvimi")
+        r_df = verileri_yukle(RANDEVU_FILE, ["Ekleyen", "Tarih", "Saat", "Musteri", "Ilan_No", "Notlar"])
+        
+        with st.expander("➕ Yeni Randevu Kaydı"):
+            with st.form("r_form"):
+                d = st.date_input("Randevu Günü")
+                s = st.time_input("Saat")
+                m = st.text_input("Müşteri Adı")
+                # ESKİ HALİ: Tüm portföyden seçim yapma
+                p_secim = st.selectbox("İlgili İlan", [f"{row['P_No']} - {row['Baslik']}" for _, row in df_all.iterrows()])
+                n = st.text_area("Randevu Notları")
+                if st.form_submit_button("Randevuyu Kaydet"):
+                    yeni_r = {"Ekleyen": st.session_state.username, "Tarih": str(d), "Saat": str(s), "Musteri": m, "Ilan_No": p_secim.split(" - ")[0], "Notlar": n}
+                    pd.concat([r_df, pd.DataFrame([yeni_r])]).to_csv(RANDEVU_FILE, index=False)
+                    st.success("Randevu başarıyla eklendi!")
+                    st.rerun()
+        
+        # Filtreleme: Admin her şeyi görür, danışman kendi eklediklerini
+        gosterilecek_r = r_df if st.session_state.user_type == "Yönetici" else r_df[r_df['Ekleyen'] == st.session_state.username]
+        st.table(gosterilecek_r)
 
     elif secim == "admin":
         st.title("⚙️ Yönetici Paneli")
-        st.subheader("👥 Personel Yetkilendirme ve Yönetimi")
-        
-        # Yeni Personel Ekleme
-        with st.expander("📝 Yeni Personel Kaydı"):
-            new_u = st.text_input("Kullanıcı Adı")
-            new_p = st.text_input("Şifre", type="password")
-            if st.button("Personeli Kaydet"):
-                if new_u and new_p:
-                    yeni_user = {"Kullanici": new_u, "Sifre": make_hashes(new_p), "Yetki": "Danışman", "CanAdd": True}
-                    pd.concat([users_df, pd.DataFrame([yeni_user])]).to_csv(USER_FILE, index=False)
-                    st.success("Yeni personel eklendi.")
-                    st.rerun()
-
-        st.divider()
-        
-        # Mevcut Personelleri Listele
+        st.subheader("👥 Personel Yönetimi")
         for idx, row in users_df.iterrows():
             if row['Kullanici'] != "admin":
-                with st.container():
-                    c1, c2, c3 = st.columns([2, 2, 1])
-                    c1.write(f"👤 **{row['Kullanici']}**")
-                    
-                    # İlan Ekleme Yetkisi Switch
-                    # Pandas verisi string veya bool gelebilir, kontrol edelim
-                    current_val = str(row['CanAdd']) == "True"
-                    toggle = c2.toggle("İlan Ekleme Yetkisi", value=current_val, key=f"tog_{idx}")
-                    
-                    if toggle != current_val:
-                        users_df.at[idx, 'CanAdd'] = toggle
-                        users_df.to_csv(USER_FILE, index=False)
-                        st.rerun()
-                        
-                    if c3.button("Sil", key=f"udel_{idx}"):
-                        users_df.drop(idx).to_csv(USER_FILE, index=False)
-                        st.rerun()
-
-    elif secim == "randevu":
-        st.title("📅 Randevularım")
-        r_df = verileri_yukle(RANDEVU_FILE, ["Ekleyen", "Tarih", "Saat", "Musteri", "Ilan_No", "Notlar"])
-        st.table(r_df[r_df['Ekleyen'] == st.session_state.username] if st.session_state.user_type != "Yönetici" else r_df)
+                c1, c2, c3 = st.columns([2, 2, 1])
+                c1.write(f"👤 **{row['Kullanici']}**")
+                cur_val = str(row['CanAdd']) == "True"
+                toggle = c2.toggle("İlan Ekleme Yetkisi", value=cur_val, key=f"tog_{idx}")
+                if toggle != cur_val:
+                    users_df.at[idx, 'CanAdd'] = toggle
+                    users_df.to_csv(USER_FILE, index=False)
+                    st.rerun()
+                if c3.button("Sil", key=f"udel_{idx}"):
+                    users_df.drop(idx).to_csv(USER_FILE, index=False)
+                    st.rerun()
 
     elif secim == "paylasilan":
         st.title("🔗 Gelen Paylaşımlar")
-        # Gelen paylaşımları listeleyen basit mantık
         shares = pay_all[pay_all['Paylasilan'] == st.session_state.username]
         for i, p in shares.iterrows():
             r = df_all[df_all['ID'].astype(str) == str(p['IlanID'])]
