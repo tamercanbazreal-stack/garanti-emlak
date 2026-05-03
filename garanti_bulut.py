@@ -1,64 +1,69 @@
 import streamlit as st
 import pandas as pd
-import sqlite3
 from datetime import datetime
+import os
 
-# Sayfa Ayarları (Mobil Uyumlu)
-st.set_page_config(page_title="GARANTİ EMLAK | Mobil Panel", layout="centered")
+# 1. SAYFA AYARLARI
+st.set_page_config(page_title="GARANTİ EMLAK | Yönetim", page_icon="🏠", layout="wide")
 
-# Veritabanı Bağlantısı
-def init_db():
-    conn = sqlite3.connect("garanti_bulut.db", check_same_thread=False)
-    cursor = conn.cursor()
-    cursor.execute('''CREATE TABLE IF NOT EXISTS portfoy 
-                      (id INTEGER PRIMARY KEY AUTOINCREMENT, baslik TEXT, tip TEXT, fiyat TEXT, tarih TEXT)''')
-    conn.commit()
-    return conn
+# 2. ÖZEL TASARIM (CSS)
+st.markdown("""
+    <style>
+    .stApp { background-color: #0e1117; }
+    .property-card {
+        background-color: #1d2129;
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 20px;
+        border-left: 5px solid #FFD700;
+    }
+    .price-tag { color: #00ffcc; font-size: 24px; font-weight: bold; }
+    </style>
+    """, unsafe_allow_html=True)
 
-conn = init_db()
+DB_FILE = "ilanlar.csv"
 
-# --- ARAYÜZ ---
-st.title("🏠 GARANTİ EMLAK")
-st.subheader("Kurumsal Portföy Yönetimi")
+def verileri_yukle():
+    if os.path.exists(DB_FILE):
+        return pd.read_csv(DB_FILE)
+    return pd.DataFrame(columns=["ID", "Tarih", "Baslik", "Fiyat", "Konum", "Aciklama"])
 
-menu = ["Portföy Listesi", "Yeni İlan Ekle", "Web Parsel Sorgu"]
-choice = st.sidebar.selectbox("Menü", menu)
-
-if choice == "Yeni İlan Ekle":
-    st.info("Telefondan ilan bilgilerini girip 'Kaydet'e basman yeterli.")
-    with st.form("ilan_form"):
-        baslik = st.text_input("İlan Başlığı")
-        tip = st.selectbox("Emlak Tipi", ["Daire", "Arsa", "Dükkan", "Villa"])
-        fiyat = st.text_input("Fiyat (TL)")
-        submit = st.form_submit_button("Sisteme Kaydet")
-        
-        if submit:
-            if baslik and fiyat:
-                tarih = datetime.now().strftime("%d-%m-%Y %H:%M")
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO portfoy (baslik, tip, fiyat, tarih) VALUES (?,?,?,?)", (baslik, tip, fiyat, tarih))
-                conn.commit()
-                st.success(f"{baslik} başarıyla eklendi!")
-            else:
-                st.error("Lütfen başlık ve fiyat gir kanka!")
-
-elif choice == "Portföy Listesi":
-    st.write("### Güncel İlanlar")
-    df = pd.read_sql_query("SELECT * FROM portfoy ORDER BY id DESC", conn)
+# 3. YAN PANEL (EKLEME VE YÖNETİCİ GİRİŞİ)
+with st.sidebar:
+    st.title("🏠 Garanti Emlak")
+    mod = st.radio("İşlem Seçin", ["İlanları Gör", "Yeni İlan Ekle", "Yönetici Paneli (Silme)"])
     
-    if not df.empty:
-        # Mobilde şık dursun diye tablo yerine kart şeklinde gösterelim
-        for index, row in df.iterrows():
-            with st.expander(f"{row['baslik']} - {row['fiyat']} TL"):
-                st.write(f"**Tip:** {row['tip']}")
-                st.write(f"**Tarih:** {row['tarih']}")
-                if st.button(f"Sil (ID: {row['id']})", key=row['id']):
-                    cursor = conn.cursor()
-                    cursor.execute(f"DELETE FROM portfoy WHERE id={row['id']}")
-                    conn.commit()
-                    st.rerun()
-    else:
-        st.warning("Henüz portföyde ilan yok.")
+    if mod == "Yeni İlan Ekle":
+        with st.form("ekle_form", clear_on_submit=True):
+            b = st.text_input("İlan Başlığı")
+            f = st.text_input("Fiyat")
+            k = st.text_input("Konum")
+            a = st.text_area("Açıklama")
+            if st.form_submit_button("Kaydet"):
+                df = verileri_yukle()
+                yeni = {"ID": datetime.now().strftime("%Y%m%d%H%M%S"), "Tarih": datetime.now().strftime("%d/%m/%Y"), "Baslik": b, "Fiyat": f, "Konum": k, "Aciklama": a}
+                df = pd.concat([df, pd.DataFrame([yeni])], ignore_index=True)
+                df.to_csv(DB_FILE, index=False)
+                st.success("İlan eklendi!")
 
-elif choice == "Web Parsel Sorgu":
-    st.link_button("TKGM Parsel Sorgu'ya Git", "https://parselsorgu.tkgm.gov.tr/")
+# 4. ANA EKRAN (LİSTELEME VE SİLME)
+df = verileri_yukle()
+
+if mod == "İlanları Gör":
+    st.header("📋 Güncel Portföy")
+    for i, r in df.iloc[::-1].iterrows():
+        st.markdown(f'<div class="property-card"><h3>{r["Baslik"]}</h3><p>📍 {r["Konum"]} | 📅 {r["Tarih"]}</p><div class="price-tag">{r["Fiyat"]} TL</div><p>{r["Aciklama"]}</p></div>', unsafe_allow_html=True)
+
+elif mod == "Yönetici Paneli (Silme)":
+    st.header("⚙️ İlan Yönetimi")
+    sifre = st.text_input("Yönetici Şifresi", type="password")
+    if sifre == "tarsus33": # ŞİFREN BU KANKA
+        for i, r in df.iterrows():
+            col1, col2 = st.columns([4, 1])
+            col1.write(f"**{r['Baslik']}** ({r['Fiyat']} TL)")
+            if col2.button("SİL", key=r['ID']):
+                df = df.drop(i)
+                df.to_csv(DB_FILE, index=False)
+                st.rerun()
+    elif sifre:
+        st.error("Şifre Yanlış!")
