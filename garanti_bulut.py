@@ -3,18 +3,22 @@ import pandas as pd
 from datetime import datetime
 import os
 import hashlib
+import subprocess
+import sys
 
-# --- KÜTÜPHANE HATA KONTROLÜ (GÜNCELLENDİ) ---
+# --- OTOMATİK KÜTÜPHANE YÜKLEME (FAIL-SAFE) ---
+def install_package(package):
+    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
 try:
     from fpdf import FPDF
 except ImportError:
-    try:
-        from fpdf2 import FPDF
-    except ImportError:
-        st.error("HATA: 'fpdf2' kütüphanesi yüklenemedi. Lütfen GitHub'daki 'requirements.txt' dosyanızı kontrol edin ve Streamlit Cloud panelinden 'Reboot App' yapın.")
+    with st.spinner('Sistem ilk kurulumu yapıyor, lütfen bekleyin...'):
+        install_package("fpdf2")
+        from fpdf import FPDF
 
 # 1. SAYFA AYARLARI
-st.set_page_config(page_title="GARANTİ EMLAK | Yönetim Paneli", page_icon="🏠", layout="wide")
+st.set_page_config(page_title="GARANTİ EMLAK | Yönetim", page_icon="🏠", layout="wide")
 LOGO_URL = "https://i.hizliresim.com/iwyt3qr.png"
 
 # Dosya Yolları
@@ -23,7 +27,7 @@ USER_FILE = "kullanicilar_v3.csv"
 SHARED_FILE = "paylasimlar.csv"
 RANDEVU_FILE = "randevular.csv"
 
-# 2. VERİ YÖNETİM FONKSİYONLARI
+# 2. VERİ FONKSİYONLARI
 def make_hashes(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
 
@@ -32,12 +36,6 @@ def verileri_yukle(dosya, sutunlar):
         return pd.read_csv(dosya)
     return pd.DataFrame(columns=sutunlar)
 
-def format_para(sayi):
-    try:
-        temiz_sayi = int(''.join(filter(str.isdigit, str(sayi))))
-        return f"{temiz_sayi:,}".replace(",", ".")
-    except: return sayi
-
 # 3. TASARIM (CSS)
 st.markdown("""
     <style>
@@ -45,9 +43,8 @@ st.markdown("""
     .property-card {
         background: white; padding: 20px; border-radius: 12px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 15px;
-        border-left: 5px solid #8CC63F; transition: 0.3s;
+        border-left: 5px solid #8CC63F;
     }
-    .property-card:hover { transform: translateY(-3px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
     </style>
     """, unsafe_allow_html=True)
 
@@ -60,150 +57,86 @@ if not st.session_state.logged_in:
     c1, c2, c3 = st.columns([1, 1.5, 1])
     with c2:
         st.image(LOGO_URL, use_container_width=True)
-        tab1, tab2 = st.tabs(["🔐 Giriş Yap", "📝 Personel Kaydı"])
-        with tab1:
-            u_name = st.text_input("Kullanıcı Adı")
-            u_pass = st.text_input("Şifre", type="password")
-            if st.button("Sisteme Giriş", use_container_width=True):
-                if u_name == "admin" and u_pass == "3363Garanti":
-                    st.session_state.logged_in, st.session_state.user_type, st.session_state.username = True, "Yönetici", "admin"
-                    st.rerun()
-                else:
-                    users = verileri_yukle(USER_FILE, ["Kullanici", "Sifre", "Yetki"])
-                    if not users[(users['Kullanici'] == u_name) & (users['Sifre'] == make_hashes(u_pass))].empty:
-                        st.session_state.logged_in, st.session_state.user_type, st.session_state.username = True, "Danışman", u_name
-                        st.rerun()
-                    else: st.error("Hatalı Giriş Bilgileri!")
-        with tab2:
-            n_user = st.text_input("Yeni Personel Adı")
-            n_pass = st.text_input("Şifre Belirle", type="password")
-            if st.button("Kaydı Tamamla"):
+        u_name = st.text_input("Kullanıcı Adı")
+        u_pass = st.text_input("Şifre", type="password")
+        if st.button("Sisteme Giriş", use_container_width=True):
+            if u_name == "admin" and u_pass == "3363Garanti":
+                st.session_state.logged_in, st.session_state.user_type, st.session_state.username = True, "Yönetici", "admin"
+                st.rerun()
+            else:
                 users = verileri_yukle(USER_FILE, ["Kullanici", "Sifre", "Yetki"])
-                if n_user in users['Kullanici'].values: st.warning("Bu isim zaten kayıtlı.")
-                else:
-                    pd.concat([users, pd.DataFrame([{"Kullanici": n_user, "Sifre": make_hashes(n_pass), "Yetki": "Danışman"}])]).to_csv(USER_FILE, index=False)
-                    st.success("Kayıt Başarılı!")
+                if not users[(users['Kullanici'] == u_name) & (users['Sifre'] == make_hashes(u_pass))].empty:
+                    st.session_state.logged_in, st.session_state.user_type, st.session_state.username = True, "Danışman", u_name
+                    st.rerun()
+                else: st.error("Hatalı Giriş!")
 
 # --- ANA PANEL ---
 else:
     with st.sidebar:
         st.image(LOGO_URL, use_container_width=True)
-        st.write(f"👤 **{st.session_state.username}** ({st.session_state.user_type})")
+        st.write(f"👤 **{st.session_state.username}**")
         st.divider()
-        menu_items = ["📋 İlan Portföyü", "➕ Yeni İlan Ekle", "📅 Randevu Takvimi", "📄 Sözleşme Hazırla"]
-        if st.session_state.user_type == "Yönetici": menu_items.append("⚙️ Yönetici Paneli")
-        secim = st.radio("MENÜ", menu_items)
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        if st.button("🚪 Çıkış Yap", use_container_width=True):
+        menu = st.radio("MENÜ", ["📋 Portföy", "➕ İlan Ekle", "📅 Randevular", "📄 Sözleşme", "🚪 Çıkış"])
+        if st.button("Çıkış Yap"):
             st.session_state.logged_in = False
             st.rerun()
 
     # 1. PORTFÖY VE PAYLAŞIM
-    if secim == "📋 İlan Portföyü":
-        st.title("🏡 Gayrimenkul Listesi")
+    if menu == "📋 Portföy":
+        st.title("🏡 Gayrimenkul Portföyü")
         df = verileri_yukle(DB_FILE, ["ID", "Sahip", "Tarih", "Baslik", "Fiyat", "Konum", "Aciklama"])
         paylasimlar = verileri_yukle(SHARED_FILE, ["IlanID", "Paylasan", "Paylasilan"])
         
         pay_idleri = paylasimlar[paylasimlar['Paylasilan'] == st.session_state.username]['IlanID'].astype(str).tolist()
         display_df = df[(df['Sahip'] == st.session_state.username) | (df['ID'].astype(str).isin(pay_idleri))]
         
-        if not display_df.empty:
-            for i, r in display_df.iloc[::-1].iterrows():
-                is_shared = str(r['ID']) in pay_idleri
-                with st.container():
-                    st.markdown(f"""<div class="property-card">
-                        <div style="display:flex; justify-content:space-between;">
-                            <span style="font-size:12px; color:gray;">{'🔗 Paylaşılan' if is_shared else '🏠 Kendi İlanım'} | {r['Sahip']}</span>
-                            <span style="color:#4b8a00; font-weight:bold;">{r['Fiyat']} TL</span>
-                        </div>
-                        <h4>{r['Baslik']}</h4><p>📍 {r['Konum']}</p><p style="font-size:14px;">{r['Aciklama']}</p>
-                    </div>""", unsafe_allow_html=True)
-                    
-                    c1, c2 = st.columns([1, 4])
-                    if c1.button("🗑️ Sil", key=f"del_{r['ID']}"):
-                        df = df[df['ID'] != r['ID']]
-                        df.to_csv(DB_FILE, index=False)
-                        st.rerun()
-                    
-                    if not is_shared:
-                        u_list = verileri_yukle(USER_FILE, ["Kullanici"])['Kullanici'].tolist()
-                        digerleri = [u for u in u_list if u != st.session_state.username]
-                        if digerleri:
-                            arkadas = c2.selectbox("Paylaş:", digerleri, key=f"sel_{r['ID']}")
-                            if c2.button("Yetki Ver", key=f"shr_{r['ID']}"):
-                                pd.concat([paylasimlar, pd.DataFrame([{"IlanID": r['ID'], "Paylasan": st.session_state.username, "Paylasilan": arkadas}])]).to_csv(SHARED_FILE, index=False)
-                                st.success("Paylaşıldı!")
+        for i, r in display_df.iterrows():
+            st.markdown(f'<div class="property-card"><b>{r["Baslik"]}</b><br>{r["Fiyat"]} TL - {r["Konum"]}</div>', unsafe_allow_html=True)
+            if st.button(f"Sil", key=f"del_{r['ID']}"):
+                df[df['ID'] != r['ID']].to_csv(DB_FILE, index=False)
+                st.rerun()
+        
+        if st.button("📂 Katalog İndir (PDF)"):
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Arial", 'B', 16)
+            pdf.cell(0, 10, "GARANTI EMLAK PORTFOY", ln=True, align='C')
+            for _, row in display_df.iterrows():
+                pdf.ln(10)
+                pdf.set_font("Arial", size=12)
+                pdf.cell(0, 10, f"{row['Baslik']} - {row['Fiyat']} TL", ln=True)
+            st.download_button("📥 PDF İndir", pdf.output(dest='S').encode('latin-1', 'ignore'), "katalog.pdf")
 
-            if st.button("📂 Katalog Oluştur (PDF)"):
-                try:
-                    pdf = FPDF()
-                    pdf.add_page()
-                    pdf.set_font("Helvetica", 'B', 16)
-                    pdf.cell(0, 10, "GARANTI EMLAK KATALOG", ln=True, align='C')
-                    pdf.set_font("Helvetica", size=11)
-                    for _, row in display_df.iterrows():
-                        pdf.ln(10)
-                        pdf.cell(0, 10, f"{row['Baslik']} - {row['Fiyat']} TL", ln=True)
-                        pdf.multi_cell(0, 5, f"Konum: {row['Konum']}\nDetay: {row['Aciklama']}")
-                    st.download_button("📥 İndir", pdf.output(dest='S').encode('latin-1', 'ignore'), "katalog.pdf", "application/pdf")
-                except NameError:
-                    st.error("PDF kütüphanesi hazır değil.")
-
-    # 2. YENİ İLAN EKLE
-    elif secim == "➕ Yeni İlan Ekle":
-        st.title("İlan Kaydı")
-        with st.form("ilan_form"):
-            b, f = st.columns(2); baslik, fiyat = b.text_input("İlan Başlığı"), f.text_input("Fiyat")
-            k, t = st.columns(2); konum, tarih = k.text_input("Konum"), t.date_input("Tarih")
+    # 2. İLAN EKLE
+    elif menu == "➕ İlan Ekle":
+        with st.form("yeni_ilan"):
+            baslik = st.text_input("Başlık")
+            fiyat = st.text_input("Fiyat")
+            konum = st.text_input("Konum")
             detay = st.text_area("Açıklama")
             if st.form_submit_button("Kaydet"):
                 df = verileri_yukle(DB_FILE, ["ID", "Sahip", "Tarih", "Baslik", "Fiyat", "Konum", "Aciklama"])
-                yeni = {"ID": datetime.now().strftime("%Y%m%d%H%M%S"), "Sahip": st.session_state.username, "Tarih": tarih.strftime("%d/%m/%Y"), "Baslik": baslik, "Fiyat": format_para(fiyat), "Konum": konum, "Aciklama": detay}
+                yeni = {"ID": datetime.now().strftime("%Y%m%d%H%M%S"), "Sahip": st.session_state.username, "Tarih": datetime.now().strftime("%d/%m/%Y"), "Baslik": baslik, "Fiyat": fiyat, "Konum": konum, "Aciklama": detay}
                 pd.concat([df, pd.DataFrame([yeni])]).to_csv(DB_FILE, index=False)
-                st.success("Eklendi!"); st.rerun()
+                st.success("Eklendi!")
 
-    # 3. RANDEVU TAKVİMİ
-    elif secim == "📅 Randevu Takvimi":
-        st.title("Müşteri Randevu Takibi")
+    # 3. RANDEVULAR
+    elif menu == "📅 Randevular":
         r_df = verileri_yukle(RANDEVU_FILE, ["Tarih", "Saat", "Musteri", "Ilan"])
         with st.form("r_form"):
-            c1, c2 = st.columns(2); d, s = c1.date_input("Gün"), c2.time_input("Saat")
-            m, i = st.columns(2); mus, ila = m.text_input("Müşteri"), i.text_input("Adres/İlan")
-            if st.form_submit_button("Randevuyu Yaz"):
-                pd.concat([r_df, pd.DataFrame([{"Tarih": str(d), "Saat": str(s), "Musteri": mus, "Ilan": ila}])]).to_csv(RANDEVU_FILE, index=False)
+            d = st.date_input("Gün"); s = st.time_input("Saat")
+            m = st.text_input("Müşteri"); i = st.text_input("İlan")
+            if st.form_submit_button("Kaydet"):
+                pd.concat([r_df, pd.DataFrame([{"Tarih": str(d), "Saat": str(s), "Musteri": m, "Ilan": i}])]).to_csv(RANDEVU_FILE, index=False)
                 st.rerun()
         st.table(r_df)
 
-    # 4. SÖZLEŞME HAZIRLA
-    elif secim == "📄 Sözleşme Hazırla":
-        st.title("Sözleşme PDF Hazırlama")
-        tip = st.selectbox("Form:", ["Yer Gösterme Belgesi", "Kira Kontratı", "Satış Protokolü"])
-        isim = st.text_input("Müşteri Ad Soyad")
-        if st.button("📄 PDF Oluştur"):
-            try:
-                pdf = FPDF(); pdf.add_page(); pdf.set_font("Helvetica", 'B', 15)
-                pdf.cell(0, 10, f"GARANTI EMLAK - {tip.upper()}", ln=True, align='C')
-                pdf.ln(10); pdf.set_font("Helvetica", size=11)
-                pdf.multi_cell(0, 10, f"Sayin {isim},\n\nBu belge {datetime.now().strftime('%d/%m/%Y')} tarihinde tanzim edilmiştir.\n\nİlgili emlak hizmeti detayları aşağıdadır...")
-                st.download_button("📥 İndir", pdf.output(dest='S').encode('latin-1', 'ignore'), "sozlesme.pdf")
-            except NameError:
-                st.error("PDF kütüphanesi hazır değil.")
-
-    # 5. YÖNETİCİ PANELİ
-    elif secim == "⚙️ Yönetici Paneli" and st.session_state.user_type == "Yönetici":
-        st.title("Sistem Yönetimi")
-        t1, t2 = st.tabs(["👥 Personel", "🗑️ Tüm İlanlar"])
-        with t1:
-            u = verileri_yukle(USER_FILE, ["Kullanici", "Yetki"])
-            for i, row in u.iterrows():
-                c1, c2 = st.columns([4, 1])
-                c1.write(f"👤 {row['Kullanici']}")
-                if c2.button("SİL", key=f"u_{row['Kullanici']}"):
-                    u.drop(i).to_csv(USER_FILE, index=False); st.rerun()
-        with t2:
-            all_i = verileri_yukle(DB_FILE, ["ID", "Baslik", "Sahip"])
-            for i, row in all_i.iterrows():
-                c1, c2 = st.columns([4, 1])
-                c1.write(f"🏠 {row['Baslik']} ({row['Sahip']})")
-                if c2.button("KALDIR", key=f"i_{row['ID']}"):
-                    all_i.drop(i).to_csv(DB_FILE, index=False); st.rerun()
+    # 4. SÖZLEŞME
+    elif menu == "📄 Sözleşme":
+        isim = st.text_input("Müşteri Adı")
+        if st.button("PDF Sözleşme Oluştur"):
+            pdf = FPDF(); pdf.add_page(); pdf.set_font("Arial", 'B', 16)
+            pdf.cell(0, 10, f"GARANTI EMLAK - SOZLESME", ln=True, align='C')
+            pdf.ln(10); pdf.set_font("Arial", size=12)
+            pdf.multi_cell(0, 10, f"Sayin {isim}, Garanti Emlak hizmet belgesidir.")
+            st.download_button("📥 İndir", pdf.output(dest='S').encode('latin-1', 'ignore'), "sozlesme.pdf")
