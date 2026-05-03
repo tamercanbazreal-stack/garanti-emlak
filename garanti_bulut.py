@@ -82,7 +82,8 @@ else:
 
     if st.session_state.username != "admin":
         curr_user = users_df[users_df['Kullanici'] == st.session_state.username]
-        st.session_state.can_add = str(curr_user.iloc[0]['CanAdd']) == "True"
+        if not curr_user.empty:
+            st.session_state.can_add = str(curr_user.iloc[0]['CanAdd']) == "True"
 
     with st.sidebar:
         st.image(LOGO_URL, use_container_width=True)
@@ -91,7 +92,7 @@ else:
         st.divider()
         
         menu_items = {"📋 Portföyüm": "portfoy", "🔗 Gelenler": "paylasilan"}
-        if st.session_state.user_type == "Yönetici" or st.session_state.can_add:
+        if st.session_state.user_type == "Yönetici" or st.session_state.get('can_add', False):
             menu_items["➕ İlan Ekle"] = "ekle"
         menu_items["📅 Randevular"] = "randevu"
         if st.session_state.user_type == "Yönetici":
@@ -179,33 +180,30 @@ else:
         
         st.divider()
         
-        # Filtreleme: Danışman sadece kendininkini, Admin hepsini görür
-        if st.session_state.user_type == "Yönetici":
-            gosterilecek_r = r_df
-        else:
-            gosterilecek_r = r_df[r_df['Ekleyen'] == st.session_state.username]
+        gosterilecek_r = r_df if st.session_state.user_type == "Yönetici" else r_df[r_df['Ekleyen'] == st.session_state.username]
 
         if gosterilecek_r.empty:
             st.info("Kayıtlı randevu bulunamadı.")
         else:
-            for idx, row in gosterilecek_r.iloc[::-1].iterrows():
-                with st.container():
-                    st.markdown(f"""
-                    <div class="appointment-card">
-                        <b>📅 {row['Tarih']} | ⏰ {row['Saat']}</b><br>
-                        👤 Müşteri: {row['Musteri']} <br>
-                        🏠 İlan No: {row['Ilan_No']} <br>
-                        📝 Not: {row['Notlar']} <br>
-                        {f'✍️ Ekleyen: {row["Ekleyen"]}' if st.session_state.user_type == "Yönetici" else ''}
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # SİLME YETKİSİ: Admin herkesinkini, Danışman sadece kendininkini silebilir
-                    if st.button("🗑️ Randevuyu Sil", key=f"r_del_{row['ID']}"):
-                        r_df = r_df[r_df['ID'].astype(str) != str(row['ID'])]
-                        r_df.to_csv(RANDEVU_FILE, index=False)
-                        st.success("Randevu silindi!")
-                        st.rerun()
+            # Buradaki döngüde .reset_index() ve benzersiz anahtar kullanarak hatayı çözdük
+            for idx, row in gosterilecek_r.iloc[::-1].reset_index().iterrows():
+                st.markdown(f"""
+                <div class="appointment-card">
+                    <b>📅 {row['Tarih']} | ⏰ {row['Saat']}</b><br>
+                    👤 Müşteri: {row['Musteri']} <br>
+                    🏠 İlan No: {row['Ilan_No']} <br>
+                    📝 Not: {row['Notlar']} <br>
+                    {f'✍️ Ekleyen: {row["Ekleyen"]}' if st.session_state.user_type == "Yönetici" else ''}
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Çakışmayı önlemek için hem index hem ID kullandık
+                btn_key = f"btn_del_{row['ID']}_{idx}"
+                if st.button("🗑️ Randevuyu Sil", key=btn_key):
+                    r_df = r_df[r_df['ID'].astype(str) != str(row['ID'])]
+                    r_df.to_csv(RANDEVU_FILE, index=False)
+                    st.success("Randevu silindi!")
+                    st.rerun()
 
     elif secim == "admin":
         st.title("⚙️ Yönetici Paneli")
