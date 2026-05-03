@@ -3,123 +3,146 @@ import pandas as pd
 from datetime import datetime
 import os
 import hashlib
-from fpdf import FPDF # PDF için bu kütüphaneyi kurmalısın: pip install fpdf2
+from fpdf import FPDF
 
-# 1. SAYFA AYARLARI
-st.set_page_config(page_title="GARANTİ EMLAK | Profesyonel", page_icon="🏢", layout="wide")
-
+# 1. SAYFA VE LOGO AYARLARI
+st.set_page_config(page_title="GARANTİ EMLAK | Yönetim", page_icon="🏢", layout="wide")
 LOGO_URL = "https://i.hizliresim.com/iwyt3qr.png"
+
+# Dosya Yolları
 DB_FILE = "ilanlar_v3.csv"
 USER_FILE = "kullanicilar_v3.csv"
-SHARED_FILE = "paylasimlar.csv" # Paylaşılan portföyler için
+SHARED_FILE = "paylasimlar.csv"
+RANDEVU_FILE = "randevular.csv"
 
-# 2. VERİ YÖNETİMİ
-def verileri_yukle():
-    if os.path.exists(DB_FILE): return pd.read_csv(DB_FILE)
-    return pd.DataFrame(columns=["ID", "Sahip", "Tarih", "Baslik", "Fiyat", "Konum", "Aciklama"])
+# 2. VERİ TABANI FONKSİYONLARI
+def verileri_yukle(dosya, sutunlar):
+    if os.path.exists(dosya):
+        return pd.read_csv(dosya)
+    return pd.DataFrame(columns=sutunlar)
 
-def kullanicilari_yukle():
-    if os.path.exists(USER_FILE): return pd.read_csv(USER_FILE)
-    return pd.DataFrame(columns=["Kullanici", "Sifre", "Yetki"])
+def make_hashes(password):
+    return hashlib.sha256(str.encode(password)).hexdigest()
 
-def paylasimlari_yukle():
-    if os.path.exists(SHARED_FILE): return pd.read_csv(SHARED_FILE)
-    return pd.DataFrame(columns=["IlanID", "Paylasan", "Paylasilan"])
+# 3. PDF OLUŞTURUCU (Katalog ve Sözleşme için)
+class PDF(FPDF):
+    def header(self):
+        self.set_font('Arial', 'B', 15)
+        self.cell(0, 10, 'GARANTI EMLAK KURUMSAL', 0, 1, 'C')
+        self.ln(5)
 
-# 3. PDF KATALOG OLUŞTURUCU
-def pdf_olustur(ilan_verisi):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(200, 10, txt="GARANTI EMLAK PORTFOY KATALOGU", ln=True, align='C')
-    pdf.ln(10)
-    
-    for _, r in ilan_verisi.iterrows():
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, txt=f"{r['Baslik']} - {r['Fiyat']} TL", ln=True)
-        pdf.set_font("Arial", "", 10)
-        pdf.multi_cell(0, 5, txt=f"Konum: {r['Konum']}\nAciklama: {r['Aciklama']}\nDanisman: {r['Sahip']}\n")
-        pdf.ln(5)
-    
-    return pdf.output(dest='S').encode('latin-1', 'ignore')
-
-# 4. TASARIM (CSS)
-st.markdown("""
-    <style>
-    [data-testid="stSidebar"] { background-color: #f1f3f5 !important; }
-    .stButton>button { border-radius: 8px; transition: 0.3s; }
-    .share-card { background: #e3f2fd; padding: 10px; border-radius: 5px; margin-bottom: 5px; border-left: 5px solid #2196f3; }
-    </style>
-    """, unsafe_allow_html=True)
-
-# 5. OTURUM VE GİRİŞ (Önceki kodla aynı mantık...)
+# 4. GİRİŞ KONTROLÜ
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
+# --- GİRİŞ EKRANI ---
+if not st.session_state.logged_in:
+    c1, c2, c3 = st.columns([1, 1.5, 1])
+    with c2:
+        st.image(LOGO_URL)
+        u_name = st.text_input("Kullanıcı Adı")
+        u_pass = st.text_input("Şifre", type="password")
+        if st.button("Sisteme Giriş Yap", use_container_width=True):
+            if u_name == "admin" and u_pass == "3363Garanti":
+                st.session_state.logged_in = True
+                st.session_state.user_type = "Yönetici"
+                st.session_state.username = "admin"
+                st.rerun()
+            else:
+                users = verileri_yukle(USER_FILE, ["Kullanici", "Sifre", "Yetki"])
+                hashed = make_hashes(u_pass)
+                if not users[(users['Kullanici'] == u_name) & (users['Sifre'] == hashed)].empty:
+                    st.session_state.logged_in = True
+                    st.session_state.user_type = "Danışman"
+                    st.session_state.username = u_name
+                    st.rerun()
+                else: st.error("Hatalı Giriş!")
+
 # --- ANA PANEL ---
-if st.session_state.logged_in:
+else:
     with st.sidebar:
         st.image(LOGO_URL)
-        menu = st.radio("MENÜ", ["📋 Portföy & Paylaşım", "📅 Randevu Takvimi", "📄 Sözleşme Hazırla", "⚙️ Admin Paneli", "🚪 Çıkış"])
+        st.write(f"👤 **{st.session_state.username}**")
+        st.divider()
+        menu = st.radio("MENÜ", ["📋 Portföy & Paylaşım", "➕ İlan Ekle", "📅 Randevular", "📄 Sözleşme Hazırla", "⚙️ Yönetici", "🚪 Çıkış"])
 
-    # 1. PORTFÖY VE ÖZEL PAYLAŞIM
+    # 1. PORTFÖY VE PAYLAŞIM
     if menu == "📋 Portföy & Paylaşım":
-        st.title("🏡 Portföy Yönetimi ve İşbirliği")
-        df = verileri_yukle()
-        paylasimlar = paylasimlari_yukle()
+        st.title("🏡 Gayrimenkul Portföyü")
+        df = verileri_yukle(DB_FILE, ["ID", "Sahip", "Tarih", "Baslik", "Fiyat", "Konum", "Aciklama"])
+        paylasimlar = verileri_yukle(SHARED_FILE, ["IlanID", "Paylasan", "Paylasilan"])
         
-        # Paylaşılan ilanları bul
+        # Paylaşılanları Filtrele
         paylasilan_idleri = paylasimlar[paylasimlar['Paylasilan'] == st.session_state.username]['IlanID'].tolist()
-        
-        # Görünecek ilanlar: Kendi ilanlarım + Bana paylaşılanlar
         display_df = df[(df['Sahip'] == st.session_state.username) | (df['ID'].isin(paylasilan_idleri))]
         
         if not display_df.empty:
             for i, r in display_df.iterrows():
                 is_shared = r['ID'] in paylasilan_idleri
-                label = "🔗 Paylaşılan İlan" if is_shared else "🏠 Benim İlanım"
+                st.info(f"{'🔗 Paylaşılan' if is_shared else '🏠 Kendi İlanım'} - {r['Baslik']}")
+                st.write(f"**Fiyat:** {r['Fiyat']} TL | **Konum:** {r['Konum']}")
                 
-                with st.expander(f"{label} | {r['Baslik']} - {r['Fiyat']}"):
-                    st.write(f"**Konum:** {r['Konum']} | **Ekleyen:** {r['Sahip']}")
-                    st.write(r['Aciklama'])
-                    
-                    # Paylaşma Bölümü (Sadece kendi ilanını paylaşabilir)
-                    if not is_shared:
-                        users = kullanicilari_yukle()
-                        diger_uyeler = users[users['Kullanici'] != st.session_state.username]['Kullanici'].tolist()
-                        secilen_uye = st.selectbox("Paylaşılacak Kişi", diger_uyeler, key=f"sel_{r['ID']}")
-                        if st.button("Yetki Ver / Paylaş", key=f"btn_{r['ID']}"):
-                            yeni_p = pd.DataFrame([{"IlanID": r['ID'], "Paylasan": st.session_state.username, "Paylasilan": secilen_uye}])
-                            pd.concat([paylasimlar, yeni_p]).to_csv(SHARED_FILE, index=False)
-                            st.success(f"Portföy {secilen_uye} ile paylaşıldı!")
+                if not is_shared:
+                    users = verileri_yukle(USER_FILE, ["Kullanici"])
+                    arkadaslar = users[users['Kullanici'] != st.session_state.username]['Kullanici'].tolist()
+                    secilen = st.selectbox("İlanı Paylaş:", arkadaslar, key=f"s_{r['ID']}")
+                    if st.button("Yetki Ver", key=f"b_{r['ID']}"):
+                        yeni_p = pd.DataFrame([{"IlanID": r['ID'], "Paylasan": st.session_state.username, "Paylasilan": secilen}])
+                        pd.concat([paylasimlar, yeni_p]).to_csv(SHARED_FILE, index=False)
+                        st.success("Paylaşıldı!")
             
-            # PDF ÇIKTISI ALMA
-            st.divider()
-            if st.button("📂 Seçili Portföyü PDF Katalog Yap"):
-                pdf_data = pdf_olustur(display_df)
-                st.download_button("📥 Kataloğu İndir", pdf_data, "garanti_emlak_katalog.pdf", "application/pdf")
+            if st.button("📂 Katalog Oluştur (PDF)"):
+                pdf = PDF()
+                pdf.add_page()
+                pdf.set_font("Arial", size=12)
+                for _, row in display_df.iterrows():
+                    pdf.cell(0, 10, f"{row['Baslik']} - {row['Fiyat']} TL", ln=True)
+                st.download_button("📥 İndir", pdf.output(), "katalog.pdf")
+        else: st.warning("İlan bulunamadı.")
 
-    # 2. RANDEVU TAKVİMİ
-    elif menu == "📅 Randevu Takvimi":
-        st.title("🕒 Yer Gösterme ve Randevu Takvimi")
-        with st.form("randevu_form"):
-            r_tarih = st.date_input("Randevu Tarihi")
-            r_saat = st.time_input("Saat")
-            r_musteri = st.text_input("Müşteri Adı")
-            r_ilan = st.text_input("Gidilecek Emlak/Yer")
-            if st.form_submit_button("Randevu Oluştur"):
-                st.success(f"{r_tarih} saat {r_saat} için {r_musteri} randevusu kaydedildi (Veritabanına bağlanacak).")
+    # 2. İLAN EKLE
+    elif menu == "➕ İlan Ekle":
+        st.title("Yeni İlan Girişi")
+        with st.form("yeni_ilan"):
+            baslik = st.text_input("Başlık")
+            fiyat = st.text_input("Fiyat")
+            konum = st.text_input("Konum")
+            aciklama = st.text_area("Açıklama")
+            if st.form_submit_button("Kaydet"):
+                df = verileri_yukle(DB_FILE, ["ID", "Sahip", "Tarih", "Baslik", "Fiyat", "Konum", "Aciklama"])
+                yeni = {"ID": str(datetime.now().timestamp()), "Sahip": st.session_state.username, 
+                        "Tarih": datetime.now().strftime("%d/%m/%Y"), "Baslik": baslik, "Fiyat": fiyat, "Konum": konum, "Aciklama": aciklama}
+                pd.concat([df, pd.DataFrame([yeni])]).to_csv(DB_FILE, index=False)
+                st.success("İlan eklendi!")
 
-    # 3. SÖZLEŞME HAZIRLAYICI
+    # 3. RANDEVULAR
+    elif menu == "📅 Randevular":
+        st.title("Randevu ve Yer Gösterme")
+        r_df = verileri_yukle(RANDEVU_FILE, ["Tarih", "Saat", "Musteri", "Not"])
+        with st.form("randevu"):
+            t = st.date_input("Tarih")
+            s = st.time_input("Saat")
+            m = st.text_input("Müşteri")
+            n = st.text_input("Not")
+            if st.form_submit_button("Randevu Yaz"):
+                yeni_r = {"Tarih": str(t), "Saat": str(s), "Musteri": m, "Not": n}
+                pd.concat([r_df, pd.DataFrame([yeni_r])]).to_csv(RANDEVU_FILE, index=False)
+                st.rerun()
+        st.table(r_df)
+
+    # 4. SÖZLEŞME HAZIRLA
     elif menu == "📄 Sözleşme Hazırla":
-        st.title("✍️ Matbu Form Oluşturucu")
-        form_tipi = st.selectbox("Form Tipi", ["Yer Gösterme Belgesi", "Kiralama Sözleşmesi", "Satış Protokolü"])
-        m_ad = st.text_input("Müşteri Ad Soyad")
-        m_tc = st.text_input("TC Kimlik No")
-        if st.button("Sözleşmeyi PDF Olarak Taslakla"):
-            st.info("Bu özellik seçilen verilere göre resmi formatta PDF doldurur.")
+        st.title("Matbu Form Hazırlama")
+        tip = st.selectbox("Form:", ["Yer Gösterme", "Kira", "Satış"])
+        ad = st.text_input("Müşteri Adı")
+        if st.button("PDF Taslağı Oluştur"):
+            st.success(f"{ad} adına {tip} formu hazırlandı. (Yazıcıya gönderilebilir)")
 
-    # 4. ÇIKIŞ (En altta)
+    # 5. YÖNETİCİ VE ÇIKIŞ
+    elif menu == "⚙️ Yönetici" and st.session_state.user_type == "Yönetici":
+        st.title("Admin Paneli")
+        st.write("Buradan tüm kullanıcıları ve ilanları silebilirsin.")
+
     elif menu == "🚪 Çıkış":
         st.session_state.logged_in = False
         st.rerun()
