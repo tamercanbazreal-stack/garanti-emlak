@@ -87,7 +87,7 @@ def verileri_yukle():
 with st.sidebar:
     # --- LOGO BURAYA ---
     # Not: Kendi logonun internet linkini buraya koyabilirsin kanka. Şimdilik şık bir emlak ikonu koydum.
-    st.image("https://hizliresim.com/38y0bo2", width=120)
+    st.image("https://i.hizliresim.com/iwyt3qr.png", width=120)
     st.markdown("<h1 style='text-align: center; color: #FFD700;'>GARANTİ EMLAK</h1>", unsafe_allow_html=True)
     st.markdown("---")
     
