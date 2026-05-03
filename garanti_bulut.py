@@ -7,91 +7,72 @@ import time
 # 1. SAYFA KONFİGÜRASYONU
 st.set_page_config(page_title="GARANTİ EMLAK | Tarsus", page_icon="🏠", layout="wide")
 
-# 2. MODERN GRİ KONSEPT VE GELİŞMİŞ ANİMASYONLAR (CSS)
+# 2. AYDINLIK TEMA VE OKUNAKLILIK AYARLARI (CSS)
 st.markdown("""
     <style>
-    /* Ana Arka Plan - Siyah değil, Şık bir Gri */
+    /* Ana Arka Plan - Tertemiz Beyaz */
     .stApp {
-        background-color: #2b2d33;
+        background-color: #ffffff;
     }
     
-    /* İlan Kartları ve Giriş Animasyonu */
+    /* İlan Kartları - Beyaz üzerine hafif gölgeli ve belirgin */
     .property-card {
-        background-color: #383b42;
-        border-radius: 18px;
+        background-color: #f8f9fa;
+        border-radius: 15px;
         padding: 25px;
         margin-bottom: 25px;
-        border: 1px solid #4a4e59;
+        border: 1px solid #e0e0e0;
         border-left: 8px solid #8CC63F; /* Logonun yeşili */
-        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        
-        /* Animasyon: Aşağıdan yukarı süzülerek gelme */
-        animation: fadeInUp 0.8s ease-out forwards;
-        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        animation: fadeInUp 0.6s ease-out forwards;
+        transition: all 0.3s ease;
     }
     
-    /* Kartın üzerine gelince parlama ve büyüme efekti */
     .property-card:hover {
-        transform: translateY(-8px) scale(1.01);
-        border-left: 8px solid #ffffff;
-        box-shadow: 0 12px 30px rgba(140, 198, 63, 0.25);
-        background-color: #40444d;
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(140, 198, 63, 0.2);
+        background-color: #ffffff;
     }
 
-    /* Başlık Animasyonu */
-    .main-title {
-        color: #ffffff;
-        font-family: 'Arial Black', sans-serif;
-        animation: fadeInDown 1s ease-out;
+    /* Yazı Renkleri - Maksimum Okunabilirlik */
+    h1, h2, h3, p, span {
+        color: #2b2d33 !important; /* Koyu Gri/Siyah yazı */
     }
 
-    /* Fiyat ve Badge Stilleri */
     .price-tag {
-        color: #8CC63F;
+        color: #4b8a00 !important; /* Daha koyu ve okunaklı bir yeşil */
         font-size: 28px;
         font-weight: 900;
-        letter-spacing: 1px;
     }
     
     .location-badge {
-        background: linear-gradient(90deg, #8CC63F, #7ab334);
-        color: #000000;
+        background-color: #8CC63F;
+        color: #ffffff !important; /* Yeşil üstüne beyaz yazı */
         padding: 5px 15px;
-        border-radius: 10px;
+        border-radius: 8px;
         font-weight: bold;
-        font-size: 14px;
-        box-shadow: 0 2px 8px rgba(140, 198, 63, 0.3);
     }
 
-    /* KEYFRAMES (Hareketler) */
+    /* Animasyonlar */
     @keyframes fadeInUp {
-        from { opacity: 0; transform: translateY(40px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes fadeInDown {
-        from { opacity: 0; transform: translateY(-30px); }
+        from { opacity: 0; transform: translateY(20px); }
         to { opacity: 1; transform: translateY(0); }
     }
 
-    /* Sidebar Tasarımı */
+    /* Sidebar (Yan Panel) - Hafif Gri */
     section[data-testid="stSidebar"] {
-        background-color: #1e2025 !important;
-        border-right: 1px solid #3d424d;
+        background-color: #f1f3f5 !important;
+        border-right: 1px solid #dee2e6;
     }
 
-    /* Buton Güzelleştirme */
+    /* Butonlar */
     .stButton>button {
         background: linear-gradient(45deg, #8CC63F, #7ab334) !important;
         color: white !important;
         font-weight: bold !important;
+        border-radius: 10px !important;
+        height: 48px !important;
         border: none !important;
-        border-radius: 12px !important;
-        height: 50px !important;
-        transition: 0.3s;
-    }
-    .stButton>button:hover {
-        filter: brightness(1.1);
-        box-shadow: 0 5px 15px rgba(140, 198, 63, 0.4);
     }
     </style>
     """, unsafe_allow_html=True)
@@ -103,54 +84,50 @@ def verileri_yukle():
         return pd.read_csv(DB_FILE)
     return pd.DataFrame(columns=["ID", "Tarih", "Baslik", "Fiyat", "Konum", "Aciklama"])
 
-# 3. YAN PANEL (SIDEBAR)
+# 3. YAN PANEL (LOGO VE MENÜ)
 with st.sidebar:
-    # Logonun linkini buraya yapıştır kanka
-    st.image("https://i.ibb.co/ZztYhP0/garanti-logo-transparan.png", use_container_width=True)
-    st.markdown("<h3 style='text-align: center; color: #8CC63F;'>KONTROL PANELİ</h3>", unsafe_allow_html=True)
+    # Logonu buraya ekledim kanka
+    st.image("https://i.hizliresim.com/iwyt3qr.png", use_container_width=True)
+    st.markdown("<h3 style='text-align: center; color: #2b2d33;'>YÖNETİM PANELİ</h3>", unsafe_allow_html=True)
     st.markdown("---")
     
-    secim = st.radio("MENÜ", ["🏠 İlanları İncele", "➕ Yeni Kayıt Oluştur", "🔐 Yönetici Girişi"])
+    secim = st.radio("MENÜ", ["🏠 İlan Listesi", "➕ Yeni İlan Ekle", "🔐 Yönetici Girişi"])
     st.markdown("---")
-    st.write(f"📍 **Mersin / Tarsus**")
-    st.write(f"📅 {datetime.now().strftime('%d.%m.%Y')}")
+    st.write("📍 **Tarsus / Mersin**")
 
-# 4. YENİ İLAN KAYDI
-if secim == "➕ Yeni Kayıt Oluştur":
-    st.markdown("<h1 class='main-title' style='color: #8CC63F;'>Yeni Portföy Girişi</h1>", unsafe_allow_html=True)
-    with st.form("modern_form", clear_on_submit=True):
-        c1, c2 = st.columns(2)
-        with c1:
-            baslik = st.text_input("🏠 İlan Başlığı")
-            fiyat = st.text_input("💰 Fiyat (TL)")
-        with c2:
-            konum = st.text_input("📍 Konum / Mahalle")
+# 4. YENİ İLAN EKLEME
+if secim == "➕ Yeni İlan Ekle":
+    st.markdown("<h1 style='color: #4b8a00;'>Yeni Portföy Kaydı</h1>", unsafe_allow_html=True)
+    with st.form("ekle_form", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            baslik = st.text_input("İlan Başlığı")
+            fiyat = st.text_input("Fiyat (TL)")
+        with col2:
+            konum = st.text_input("Bölge / Mahalle")
             tarih = datetime.now().strftime("%d/%m/%Y")
         
-        aciklama = st.text_area("📝 İlan Detaylı Açıklaması")
+        aciklama = st.text_area("İlan Detayları")
         
-        if st.form_submit_button("İlanı Yayına Al"):
+        if st.form_submit_button("İlanı Kaydet"):
             if baslik and fiyat:
-                with st.spinner('Veriler işleniyor...'):
-                    time.sleep(1)
-                    df = verileri_yukle()
-                    yeni_id = datetime.now().strftime("%Y%m%d%H%M%S")
-                    yeni_data = {"ID": yeni_id, "Tarih": tarih, "Baslik": baslik, "Fiyat": fiyat, "Konum": konum, "Aciklama": aciklama}
-                    df = pd.concat([df, pd.DataFrame([yeni_data])], ignore_index=True)
-                    df.to_csv(DB_FILE, index=False)
-                    st.balloons()
-                    st.success("İlan başarıyla yayına alındı!")
+                df = verileri_yukle()
+                yeni_id = datetime.now().strftime("%Y%m%d%H%M%S")
+                yeni_veri = {"ID": yeni_id, "Tarih": tarih, "Baslik": baslik, "Fiyat": fiyat, "Konum": konum, "Aciklama": aciklama}
+                df = pd.concat([df, pd.DataFrame([yeni_veri])], ignore_index=True)
+                df.to_csv(DB_FILE, index=False)
+                st.balloons()
+                st.success("İlan başarıyla eklendi!")
             else:
-                st.error("Başlık ve Fiyat kısımlarını boş geçme kanka!")
+                st.error("Lütfen başlık ve fiyat alanlarını doldurun.")
 
-# 5. İLAN LİSTESİ (ANİMASYONLU KARTLAR)
-elif secim == "🏠 İlanları İncele":
-    st.markdown("<h1 class='main-title'>GARANTİ <span style='color: #8CC63F;'>EMLAK</span> TARSUS</h1>", unsafe_allow_html=True)
+# 5. İLAN LİSTESİ
+elif secim == "🏠 İlan Listesi":
+    st.markdown("<h1 style='color: #2b2d33;'>GARANTİ <span style='color: #8CC63F;'>EMLAK</span> PORTFÖY</h1>", unsafe_allow_html=True)
     
     df = verileri_yukle()
     
-    # ARA ÇUBUĞU
-    ara = st.text_input("🔍 Aradığınız mülkün özelliklerini buraya yazın...", placeholder="Örn: 3+1, Kırklarsırtı, 2.500.000")
+    ara = st.text_input("🔍 İlanlarda Ara...", placeholder="Örn: 3+1, Tarsus, Acil")
     
     if not df.empty:
         if ara:
@@ -159,35 +136,29 @@ elif secim == "🏠 İlanları İncele":
         for i, r in df.iloc[::-1].iterrows():
             st.markdown(f"""
             <div class="property-card">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; justify-content: space-between;">
                     <span class="location-badge">📍 {r['Konum']}</span>
-                    <span style="color: #999; font-size: 13px;">📅 {r['Tarih']}</span>
+                    <span style="color: #666; font-size: 14px;">📅 {r['Tarih']}</span>
                 </div>
-                <h2 style="margin: 15px 0 5px 0; color: white; font-size: 24px;">{r['Baslik']}</h2>
+                <h2 style="margin: 10px 0;">{r['Baslik']}</h2>
                 <div class="price-tag">{r['Fiyat']} TL</div>
-                <div style="height: 1px; background: #4a4e59; margin: 15px 0;"></div>
-                <p style="color: #d1d1d1; line-height: 1.6;">{r['Aciklama']}</p>
+                <p style="color: #444; margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px;">{r['Aciklama']}</p>
             </div>
             """, unsafe_allow_html=True)
     else:
-        st.info("Portföyde henüz aktif ilan bulunmuyor.")
+        st.info("Henüz ilan bulunmuyor.")
 
-# 6. YÖNETİCİ PANELİ (SİLME)
+# 6. YÖNETİCİ PANELİ
 elif secim == "🔐 Yönetici Girişi":
-    st.markdown("<h1 class='main-title'>Sistem Yönetimi</h1>", unsafe_allow_html=True)
-    pw = st.text_input("Erişim Şifresi", type="password")
+    st.header("Sistem Yönetimi")
+    sifre = st.text_input("Yönetici Şifresi", type="password")
     
-    if pw == "tarsus33":
+    if sifre == "tarsus33":
         df = verileri_yukle()
-        st.write("### Mevcut İlanları Kaldır")
         for i, r in df.iterrows():
-            c1, c2 = st.columns([5, 1])
-            c1.markdown(f"**{r['Baslik']}** | {r['Fiyat']} TL")
-            if c2.button("🗑️ SİL", key=f"del_{r['ID']}"):
+            col1, col2 = st.columns([5, 1])
+            col1.write(f"**{r['Baslik']}** ({r['Fiyat']} TL)")
+            if col2.button("SİL", key=f"del_{r['ID']}"):
                 df = df.drop(i)
                 df.to_csv(DB_FILE, index=False)
-                st.toast(f"{r['Baslik']} silindi.")
-                time.sleep(0.5)
                 st.rerun()
-    elif pw:
-        st.error("Hatalı şifre denemesi!")
