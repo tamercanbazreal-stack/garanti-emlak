@@ -7,28 +7,30 @@ import base64
 # 1. SAYFA KONFİGÜRASYONU
 st.set_page_config(page_title="GARANTİ EMLAK | Tarsus", page_icon="🏠", layout="wide")
 
-# Resim Dosyasını Web Formatına Çeviren Fonksiyon
 def get_base64_of_bin_file(bin_file):
     with open(bin_file, 'rb') as f:
         data = f.read()
     return base64.b64encode(data).decode()
 
-# 2. TASARIM AYARLARI (CSS)
+# 2. MOBİL UYUMLU GELİŞMİŞ TASARIM (CSS)
 st.markdown("""
     <style>
     .stApp { background-color: #ffffff; }
     
+    /* Ana Kart Yapısı */
     .property-card {
         background-color: #fcfcfc;
         border-radius: 12px;
         margin-bottom: 20px;
         border: 1px solid #e0e2e6;
         display: flex;
-        flex-direction: row;
+        flex-direction: row; /* Masaüstünde yan yana */
         overflow: hidden;
-        height: 180px;
+        min-height: 180px;
+        transition: 0.3s;
     }
 
+    /* Görsel Kutusu */
     .img-container {
         width: 240px;
         min-width: 240px;
@@ -42,6 +44,7 @@ st.markdown("""
         object-fit: cover;
     }
 
+    /* Bilgi Alanı */
     .info-container {
         padding: 15px 20px;
         flex-grow: 1;
@@ -50,10 +53,30 @@ st.markdown("""
         justify-content: space-between;
     }
 
-    h2 { margin: 0; font-size: 18px !important; color: #2b2d33 !important; }
-    .price-text { color: #4b8a00 !important; font-size: 22px !important; font-weight: 800; }
-    .loc-text { color: #666 !important; font-size: 14px; }
-    .desc-text { color: #444 !important; font-size: 14px; line-height: 1.4; overflow: hidden; }
+    h2 { margin: 0; font-size: 18px !important; color: #2b2d33 !important; line-height: 1.2; }
+    .price-text { color: #4b8a00 !important; font-size: 22px !important; font-weight: 800; margin-top: 5px; }
+    .loc-text { color: #666 !important; font-size: 13px; margin: 5px 0; }
+    .desc-text { color: #444 !important; font-size: 14px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+    /* --- TELEFON AYARLARI (MOBILE RESPONSIVE) --- */
+    @media (max-width: 768px) {
+        .property-card {
+            flex-direction: column; /* Telefondan bakınca her şey alt alta */
+            height: auto;
+            min-height: unset;
+        }
+        .img-container {
+            width: 100%; /* Resim telefon ekranını tam kaplar */
+            height: 220px;
+        }
+        .info-container {
+            padding: 12px;
+        }
+        .price-text {
+            font-size: 20px !important;
+            margin-top: 10px;
+        }
+    }
 
     section[data-testid="stSidebar"] { background-color: #f1f3f5 !important; }
     </style>
@@ -111,25 +134,23 @@ if secim == "➕ Yeni İlan Ekle":
                 yeni_veri = {"ID": yeni_id, "Tarih": datetime.now().strftime("%d/%m/%Y"), "Baslik": baslik, "Fiyat": format_para(fiyat_input), "Konum": konum, "Aciklama": aciklama, "Foto_Yolu": resim_yolu}
                 df = pd.concat([df, pd.DataFrame([yeni_veri])], ignore_index=True)
                 df.to_csv(DB_FILE, index=False)
-                st.success("İlan başarıyla portföye eklendi!")
+                st.success("İlan eklendi!")
                 st.rerun()
 
-# 5. İLAN LİSTESİ (Sadece kutu içinde görsel)
+# 5. İLAN LİSTESİ
 elif secim == "🏠 İlan Listesi":
-    st.markdown("<h1 style='color: #2b2d33;'>GÜNCEL İLANLAR</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='color: #2b2d33;'>PORTFÖYÜMÜZ</h1>", unsafe_allow_html=True)
     df = verileri_yukle()
     
     if not df.empty:
         for i, r in df.iloc[::-1].iterrows():
-            # Görseli Base64 formatına çevirerek HTML içine gömüyoruz
             img_path = str(r['Foto_Yolu'])
             if img_path != 'nan' and os.path.exists(img_path):
                 encoded_img = get_base64_of_bin_file(img_path)
                 display_img = f"data:image/jpeg;base64,{encoded_img}"
             else:
-                display_img = "https://via.placeholder.com/240x180?text=Goruntu+Yok"
+                display_img = "https://via.placeholder.com/400x300?text=Goruntu+Yok"
             
-            # Kart Yapısı (Görsel sadece img-container içinde)
             st.markdown(f"""
             <div class="property-card">
                 <div class="img-container">
@@ -139,14 +160,14 @@ elif secim == "🏠 İlan Listesi":
                     <div>
                         <h2>{r['Baslik']}</h2>
                         <p class="loc-text">📍 {r['Konum']} | 📅 {r['Tarih']}</p>
+                        <p class="desc-text">{r['Aciklama']}</p>
                     </div>
-                    <p class="desc-text">{r['Aciklama']}</p>
                     <div class="price-text">{r['Fiyat']} TL</div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
     else:
-        st.info("Henüz ilan eklenmemiş.")
+        st.info("Henüz ilan yok.")
 
 # 6. YÖNETİCİ PANELİ
 elif secim == "🔐 Yönetici Girişi":
