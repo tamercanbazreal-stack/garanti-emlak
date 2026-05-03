@@ -46,7 +46,7 @@ st.markdown("""
     .p-no-big { background: #333; color: white; padding: 5px 12px; border-radius: 6px; font-size: 20px; font-weight: bold; display: inline-block; margin-bottom: 5px; }
     .loc-text { color: #666; font-size: 14px; margin-bottom: 5px; }
     .detail-box { background: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px dashed #8CC63F; margin-top: 10px; margin-bottom: 15px; }
-    .appointment-card { background: #fffcf0; padding: 10px; border-radius: 8px; border: 1px solid #ffeeba; margin-bottom: 10px; }
+    .appointment-card { background: #fffcf0; padding: 15px; border-radius: 10px; border: 1px solid #ffeeba; margin-bottom: 5px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -72,18 +72,13 @@ if not st.session_state.logged_in:
                     st.session_state.logged_in, st.session_state.user_type, st.session_state.username = True, user_match.iloc[0]['Yetki'], u_name
                     st.session_state.can_add = str(user_match.iloc[0]['CanAdd']) == "True"
                     st.rerun()
-                else: st.error("Hatalı Giriş!")
+                else: st.error("Hatalı Giriş Bilgileri!")
 
 # --- ANA PANEL ---
 else:
     df_all = verileri_yukle(DB_FILE, ["ID", "P_No", "Sahip", "Tarih", "Baslik", "Fiyat", "Konum", "Aciklama"])
     pay_all = verileri_yukle(SHARED_FILE, ["IlanID", "Paylasan", "Paylasilan"])
     users_df = verileri_yukle(USER_FILE, ["Kullanici", "Sifre", "Yetki", "CanAdd"])
-
-    if st.session_state.username != "admin":
-        curr_user = users_df[users_df['Kullanici'] == st.session_state.username]
-        if not curr_user.empty:
-            st.session_state.can_add = str(curr_user.iloc[0]['CanAdd']) == "True"
 
     with st.sidebar:
         st.image(LOGO_URL, use_container_width=True)
@@ -104,7 +99,7 @@ else:
             st.session_state.logged_in = False
             st.rerun()
 
-    # İLAN LİSTELEME FONKSİYONU
+    # --- İLAN LİSTELEME ---
     def ilan_listele(dataframe, admin_modu=False):
         for i, r in dataframe.iloc[::-1].iterrows():
             st.markdown(f"""<div class="property-card">
@@ -118,7 +113,7 @@ else:
             if c1.button("Kapat" if st.session_state.show_detail.get(detay_key) else "🔍 Detay", key=detay_key):
                 st.session_state.show_detail[detay_key] = not st.session_state.show_detail.get(detay_key)
                 st.rerun()
-            if c2.button("🗑️ Sil", key=f"del_{r['ID']}"):
+            if c2.button("🗑️ İlanı Sil", key=f"del_{r['ID']}"):
                 df_all[df_all['ID'].astype(str) != str(r['ID'])].to_csv(DB_FILE, index=False)
                 st.rerun()
             if not admin_modu:
@@ -131,7 +126,7 @@ else:
             if st.session_state.show_detail.get(detay_key):
                 st.markdown(f'<div class="detail-box"><b>📝 NOTLAR:</b><br>{r["Aciklama"]}</div>', unsafe_allow_html=True)
 
-    # MENÜ MANTIKLARI
+    # --- MENÜ MANTIKLARI ---
     if search_query:
         st.title("🔎 Arama Sonuçları")
         res = df_all[df_all['P_No'].astype(str).str.contains(search_query)]
@@ -154,18 +149,18 @@ else:
             a = st.text_area("Notlar *")
             if st.form_submit_button("Portföye Ekle"):
                 if not b or not f or not k or not a:
-                    st.error("⚠️ HATA: Tüm alanları doldurmak zorunludur!")
+                    st.error("⚠️ Boş ilan eklenemez! Lütfen tüm alanları doldurun.")
                 else:
                     yeni = {"ID": datetime.now().strftime("%Y%m%d%H%M%S"), "P_No": portfoy_no_uret(), "Sahip": st.session_state.username, "Tarih": datetime.now().strftime("%d/%m/%Y"), "Baslik": b, "Fiyat": format_para(f), "Konum": k, "Aciklama": a}
                     pd.concat([df_all, pd.DataFrame([yeni])]).to_csv(DB_FILE, index=False)
-                    st.success(f"✅ İlan Eklendi! NO: {yeni['P_No']}")
+                    st.success(f"✅ İlan Portföye Eklendi! NO: {yeni['P_No']}")
 
     elif secim == "randevu":
         st.title("📅 Randevu Yönetimi")
         r_df = verileri_yukle(RANDEVU_FILE, ["ID", "Ekleyen", "Tarih", "Saat", "Musteri", "Ilan_No", "Notlar"])
         
         with st.expander("➕ Yeni Randevu Kaydı"):
-            with st.form("r_form"):
+            with st.form("r_form", clear_on_submit=True):
                 d = st.date_input("Randevu Günü")
                 s = st.time_input("Saat")
                 m = st.text_input("Müşteri Adı")
@@ -180,34 +175,35 @@ else:
         
         st.divider()
         
+        # Filtreleme
         gosterilecek_r = r_df if st.session_state.user_type == "Yönetici" else r_df[r_df['Ekleyen'] == st.session_state.username]
 
         if gosterilecek_r.empty:
             st.info("Kayıtlı randevu bulunamadı.")
         else:
-            # Buradaki döngüde .reset_index() ve benzersiz anahtar kullanarak hatayı çözdük
-            for idx, row in gosterilecek_r.iloc[::-1].reset_index().iterrows():
+            for idx, row in gosterilecek_r.iloc[::-1].iterrows():
+                # Her randevu için benzersiz bir kutu
                 st.markdown(f"""
                 <div class="appointment-card">
-                    <b>📅 {row['Tarih']} | ⏰ {row['Saat']}</b><br>
+                    <b>📅 Tarih: {row['Tarih']} | ⏰ Saat: {row['Saat']}</b><br>
                     👤 Müşteri: {row['Musteri']} <br>
                     🏠 İlan No: {row['Ilan_No']} <br>
-                    📝 Not: {row['Notlar']} <br>
+                    📝 Notlar: {row['Notlar']} <br>
                     {f'✍️ Ekleyen: {row["Ekleyen"]}' if st.session_state.user_type == "Yönetici" else ''}
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Çakışmayı önlemek için hem index hem ID kullandık
-                btn_key = f"btn_del_{row['ID']}_{idx}"
-                if st.button("🗑️ Randevuyu Sil", key=btn_key):
-                    r_df = r_df[r_df['ID'].astype(str) != str(row['ID'])]
-                    r_df.to_csv(RANDEVU_FILE, index=False)
-                    st.success("Randevu silindi!")
+                # SADECE SEÇİLENİ SİL: ID üzerinden filtreleme yapar
+                if st.button("🗑️ Bu Randevuyu Sil", key=f"r_del_{row['ID']}_{idx}"):
+                    # r_df'in içinden sadece bu ID'ye sahip olmayanı tut (yani seçileni çıkar)
+                    yeni_r_df = r_df[r_df['ID'].astype(str) != str(row['ID'])]
+                    yeni_r_df.to_csv(RANDEVU_FILE, index=False)
+                    st.success("Randevu başarıyla silindi.")
                     st.rerun()
 
     elif secim == "admin":
         st.title("⚙️ Yönetici Paneli")
-        st.subheader("👥 Personel Yönetimi")
+        st.subheader("👥 Personel Yetkileri")
         for idx, row in users_df.iterrows():
             if row['Kullanici'] != "admin":
                 c1, c2, c3 = st.columns([2, 2, 1])
@@ -218,7 +214,7 @@ else:
                     users_df.at[idx, 'CanAdd'] = toggle
                     users_df.to_csv(USER_FILE, index=False)
                     st.rerun()
-                if c3.button("Sil", key=f"udel_{idx}"):
+                if c3.button("Personeli Sil", key=f"udel_{idx}"):
                     users_df.drop(idx).to_csv(USER_FILE, index=False)
                     st.rerun()
 
