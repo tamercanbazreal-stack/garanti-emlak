@@ -76,7 +76,7 @@ def verileri_yukle():
 # 3. YAN PANEL (LOGO VE NAVİGASYON)
 with st.sidebar:
     # BURAYA LOGONUN LINKINI KOYMAYI UNUTMA KANKA
-    st.image("https://i.ibb.co/ZztYhP0/garanti-logo-transparan.png", use_container_width=True) 
+    st.image("https://i.hizliresim.com/iwyt3qr.png", use_container_width=True) 
     st.markdown("<h2 style='text-align: center; color: white;'>Yönetim Paneli</h2>", unsafe_allow_html=True)
     st.markdown("---")
     
