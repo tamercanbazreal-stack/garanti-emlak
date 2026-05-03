@@ -46,6 +46,7 @@ st.markdown("""
     .p-no-big { background: #333; color: white; padding: 5px 12px; border-radius: 6px; font-size: 20px; font-weight: bold; display: inline-block; margin-bottom: 5px; }
     .loc-text { color: #666; font-size: 14px; margin-bottom: 5px; }
     .detail-box { background: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px dashed #8CC63F; margin-top: 10px; margin-bottom: 15px; }
+    .appointment-card { background: #fffcf0; padding: 10px; border-radius: 8px; border: 1px solid #ffeeba; margin-bottom: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -152,33 +153,59 @@ else:
             a = st.text_area("Notlar *")
             if st.form_submit_button("Portföye Ekle"):
                 if not b or not f or not k or not a:
-                    st.error("⚠️ HATA: Tüm alanları doldurmak zorunludur! Boş ilan eklenemez.")
+                    st.error("⚠️ HATA: Tüm alanları doldurmak zorunludur!")
                 else:
                     yeni = {"ID": datetime.now().strftime("%Y%m%d%H%M%S"), "P_No": portfoy_no_uret(), "Sahip": st.session_state.username, "Tarih": datetime.now().strftime("%d/%m/%Y"), "Baslik": b, "Fiyat": format_para(f), "Konum": k, "Aciklama": a}
                     pd.concat([df_all, pd.DataFrame([yeni])]).to_csv(DB_FILE, index=False)
-                    st.success(f"✅ İlan Portföye Eklendi! NO: {yeni['P_No']}")
+                    st.success(f"✅ İlan Eklendi! NO: {yeni['P_No']}")
 
     elif secim == "randevu":
-        st.title("📅 Randevu Takvimi")
-        r_df = verileri_yukle(RANDEVU_FILE, ["Ekleyen", "Tarih", "Saat", "Musteri", "Ilan_No", "Notlar"])
+        st.title("📅 Randevu Yönetimi")
+        r_df = verileri_yukle(RANDEVU_FILE, ["ID", "Ekleyen", "Tarih", "Saat", "Musteri", "Ilan_No", "Notlar"])
         
         with st.expander("➕ Yeni Randevu Kaydı"):
             with st.form("r_form"):
                 d = st.date_input("Randevu Günü")
                 s = st.time_input("Saat")
                 m = st.text_input("Müşteri Adı")
-                # ESKİ HALİ: Tüm portföyden seçim yapma
                 p_secim = st.selectbox("İlgili İlan", [f"{row['P_No']} - {row['Baslik']}" for _, row in df_all.iterrows()])
                 n = st.text_area("Randevu Notları")
                 if st.form_submit_button("Randevuyu Kaydet"):
-                    yeni_r = {"Ekleyen": st.session_state.username, "Tarih": str(d), "Saat": str(s), "Musteri": m, "Ilan_No": p_secim.split(" - ")[0], "Notlar": n}
+                    r_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
+                    yeni_r = {"ID": r_id, "Ekleyen": st.session_state.username, "Tarih": str(d), "Saat": str(s), "Musteri": m, "Ilan_No": p_secim.split(" - ")[0], "Notlar": n}
                     pd.concat([r_df, pd.DataFrame([yeni_r])]).to_csv(RANDEVU_FILE, index=False)
                     st.success("Randevu başarıyla eklendi!")
                     st.rerun()
         
-        # Filtreleme: Admin her şeyi görür, danışman kendi eklediklerini
-        gosterilecek_r = r_df if st.session_state.user_type == "Yönetici" else r_df[r_df['Ekleyen'] == st.session_state.username]
-        st.table(gosterilecek_r)
+        st.divider()
+        
+        # Filtreleme: Danışman sadece kendininkini, Admin hepsini görür
+        if st.session_state.user_type == "Yönetici":
+            gosterilecek_r = r_df
+        else:
+            gosterilecek_r = r_df[r_df['Ekleyen'] == st.session_state.username]
+
+        if gosterilecek_r.empty:
+            st.info("Kayıtlı randevu bulunamadı.")
+        else:
+            for idx, row in gosterilecek_r.iloc[::-1].iterrows():
+                with st.container():
+                    st.markdown(f"""
+                    <div class="appointment-card">
+                        <b>📅 {row['Tarih']} | ⏰ {row['Saat']}</b><br>
+                        👤 Müşteri: {row['Musteri']} <br>
+                        🏠 İlan No: {row['Ilan_No']} <br>
+                        📝 Not: {row['Notlar']} <br>
+                        {f'✍️ Ekleyen: {row["Ekleyen"]}' if st.session_state.user_type == "Yönetici" else ''}
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # SİLME YETKİSİ: Admin herkesinkini, Danışman sadece kendininkini silebilir
+                    if st.button("🗑️ Randevuyu Sil", key=f"r_del_{row['ID']}"):
+                        r_df = r_df[r_df['ID'].astype(str) != str(row['ID'])]
+                        r_df.to_csv(RANDEVU_FILE, index=False)
+                        st.success("Randevu silindi!")
+                        st.rerun()
 
     elif secim == "admin":
         st.title("⚙️ Yönetici Paneli")
