@@ -104,10 +104,13 @@ else:
 
     with st.sidebar:
         st.image(LOGO_URL, use_container_width=True)
-        # ESKİ YETKİ GÖRÜNÜMÜ: Adının yanında yetkin yazıyor
         st.write(f"👤 **{st.session_state.username} ({st.session_state.user_type})**")
         st.divider()
         
+        # ÖZELLİK 1: İLAN ARAMA (SİDEBARDA)
+        search_query = st.text_input("🔍 İlan Ara (No veya Başlık)", placeholder="Örn: 123456")
+        
+        st.divider()
         menu_items = {
             "📋 Benim Portföyüm": "portfoy",
             f"🔗 Paylaşılanlar ({gelen_sayi})": "paylasilan",
@@ -123,10 +126,23 @@ else:
             st.session_state.logged_in = False
             st.rerun()
 
+    # ARAMA SONUCUNU GÖSTER (EĞER ARAMA YAPILDIYSA)
+    if search_query:
+        st.title(f"🔎 '{search_query}' İçin Sonuçlar")
+        results = df_all[
+            (df_all['P_No'].astype(str).str.contains(search_query)) | 
+            (df_all['Baslik'].str.contains(search_query, case=False))
+        ]
+        if not results.empty:
+            for _, r in results.iterrows():
+                st.markdown(f'<div class="property-card"><span class="p-no">No: {r["P_No"]}</span><br><b>{r["Baslik"]}</b> | {r["Fiyat"]} TL<br><small>📍 {r["Konum"]} | 👤 Sahibi: {r["Sahip"]}</small></div>', unsafe_allow_html=True)
+        else:
+            st.warning("Eşleşen ilan bulunamadı.")
+        st.divider()
+
     # 1. BENİM PORTFÖYÜM
     if secim == "portfoy":
         st.title("📂 Benim Portföyüm")
-        # Yönetici her şeyi görebilir ama "Benim Portföyüm" sekmesi genelde kişiseldir
         kendi_df = df_all[df_all['Sahip'] == st.session_state.username]
         
         if kendi_df.empty:
@@ -141,12 +157,10 @@ else:
                     </div>""", unsafe_allow_html=True)
                     
                     c1, c2 = st.columns([1, 3])
-                    # Sadece ilan sahibi silebilir
                     if c1.button("🗑️ Sil", key=f"d_{r['ID']}"):
                         df_all[df_all['ID'] != r['ID']].to_csv(DB_FILE, index=False)
                         st.rerun()
                     
-                    # PAYLAŞMA KISITLAMASI: Sadece sahibi paylaşabilir
                     with c2:
                         with st.expander("🔗 İlanı Paylaş"):
                             u_list = verileri_yukle(USER_FILE, ["Kullanici"])['Kullanici'].tolist()
@@ -156,7 +170,6 @@ else:
                                 if st.button("Paylaşımı Başlat", key=f"p_{r['ID']}"):
                                     pd.concat([pay_all, pd.DataFrame([{"IlanID": r['ID'], "Paylasan": st.session_state.username, "Paylasilan": target}])]).to_csv(SHARED_FILE, index=False)
                                     st.success(f"{target} personeline iletildi!")
-                            else: st.write("Seçilecek başka personel yok.")
 
     # 2. PAYLAŞILAN İLANLAR
     elif secim == "paylasilan":
@@ -176,7 +189,6 @@ else:
                     <small>📍 {r['Konum']} | 👤 Gönderen: {p_kisi}</small><br>
                     <p style='font-size:14px; margin-top:5px;'>{r['Aciklama']}</p>
                 </div>""", unsafe_allow_html=True)
-                # BURADA PAYLAŞ BUTONU YOK! (Kısıtlama eklendi)
 
     # 3. YENİ İLAN EKLE
     elif secim == "ekle":
@@ -188,18 +200,23 @@ else:
                 pd.concat([df_all, pd.DataFrame([yeni])]).to_csv(DB_FILE, index=False)
                 st.success(f"İlan {yeni['P_No']} no ile eklendi!")
 
-    # 4. RANDEVULAR
+    # 4. RANDEVULAR (NOT ÖZELLİĞİ EKLENDİ)
     elif secim == "randevu":
         st.title("📅 Randevu Takvimi")
-        r_df = verileri_yukle(RANDEVU_FILE, ["Ekleyen", "Tarih", "Saat", "Musteri", "Ilan_No"])
+        r_df = verileri_yukle(RANDEVU_FILE, ["Ekleyen", "Tarih", "Saat", "Musteri", "Ilan_No", "Notlar"])
+        
         with st.expander("Yeni Randevu Oluştur"):
             with st.form("r_f"):
                 d = st.date_input("Gün"); s = st.time_input("Saat"); m = st.text_input("Müşteri")
                 ilan_sec = [f"{row['P_No']} - {row['Baslik']}" for _, row in df_all.iterrows()]
                 secilen = st.selectbox("İlgili Portföy", ilan_sec)
+                # ÖZELLİK 2: NOT ALANI
+                n = st.text_area("Randevu Notları", placeholder="Müşteri pazarlığa açık, kredi bekliyor vb.")
+                
                 if st.form_submit_button("Randevuyu Kaydet"):
-                    y_r = pd.DataFrame([{"Ekleyen": st.session_state.username, "Tarih": str(d), "Saat": str(s), "Musteri": m, "Ilan_No": secilen.split(" - ")[0]}])
+                    y_r = pd.DataFrame([{"Ekleyen": st.session_state.username, "Tarih": str(d), "Saat": str(s), "Musteri": m, "Ilan_No": secilen.split(" - ")[0], "Notlar": n}])
                     pd.concat([r_df, y_r]).to_csv(RANDEVU_FILE, index=False)
+                    st.success("Randevu notuyla birlikte kaydedildi!")
                     st.rerun()
         
         display_r = r_df if st.session_state.user_type == "Yönetici" else r_df[r_df['Ekleyen'] == st.session_state.username]
