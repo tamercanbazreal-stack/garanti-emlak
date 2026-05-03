@@ -2,40 +2,38 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import os
-import time
+import base64
 
 # 1. SAYFA KONFİGÜRASYONU
 st.set_page_config(page_title="GARANTİ EMLAK | Tarsus", page_icon="🏠", layout="wide")
 
-# 2. SAHİBİNDEN TARZI MODERN TASARIM (CSS)
+# Resim Dosyasını Web Formatına Çeviren Fonksiyon
+def get_base64_of_bin_file(bin_file):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+# 2. TASARIM AYARLARI (CSS)
 st.markdown("""
     <style>
     .stApp { background-color: #ffffff; }
     
-    /* İlan Kartı Düzeni */
     .property-card {
         background-color: #fcfcfc;
         border-radius: 12px;
         margin-bottom: 20px;
         border: 1px solid #e0e2e6;
         display: flex;
-        flex-direction: row; /* Yan yana dizilim */
+        flex-direction: row;
         overflow: hidden;
-        transition: all 0.3s ease;
-        height: 180px; /* Sabit yükseklik ile daha düzenli */
-    }
-    
-    .property-card:hover {
-        border-color: #8CC63F;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        height: 180px;
     }
 
-    /* Görsel Alanı (Küçük ve Sabit) */
     .img-container {
         width: 240px;
         min-width: 240px;
-        height: 100%;
-        background-color: #eee;
+        height: 180px;
+        background-color: #f0f0f0;
     }
     
     .thumb-img {
@@ -44,7 +42,6 @@ st.markdown("""
         object-fit: cover;
     }
 
-    /* İçerik Alanı */
     .info-container {
         padding: 15px 20px;
         flex-grow: 1;
@@ -56,15 +53,9 @@ st.markdown("""
     h2 { margin: 0; font-size: 18px !important; color: #2b2d33 !important; }
     .price-text { color: #4b8a00 !important; font-size: 22px !important; font-weight: 800; }
     .loc-text { color: #666 !important; font-size: 14px; }
-    .desc-text { color: #444 !important; font-size: 14px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .desc-text { color: #444 !important; font-size: 14px; line-height: 1.4; overflow: hidden; }
 
     section[data-testid="stSidebar"] { background-color: #f1f3f5 !important; }
-    
-    /* Mobil Uyum */
-    @media (max-width: 768px) {
-        .property-card { flex-direction: column; height: auto; }
-        .img-container { width: 100%; height: 200px; }
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -120,27 +111,29 @@ if secim == "➕ Yeni İlan Ekle":
                 yeni_veri = {"ID": yeni_id, "Tarih": datetime.now().strftime("%d/%m/%Y"), "Baslik": baslik, "Fiyat": format_para(fiyat_input), "Konum": konum, "Aciklama": aciklama, "Foto_Yolu": resim_yolu}
                 df = pd.concat([df, pd.DataFrame([yeni_veri])], ignore_index=True)
                 df.to_csv(DB_FILE, index=False)
-                st.success("İlan eklendi!")
+                st.success("İlan başarıyla portföye eklendi!")
                 st.rerun()
 
-# 5. İLAN LİSTESİ (SAHİBİNDEN STİLİ)
+# 5. İLAN LİSTESİ (Sadece kutu içinde görsel)
 elif secim == "🏠 İlan Listesi":
-    st.markdown("<h1 style='color: #2b2d33;'>PORTFÖYÜMÜZ</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='color: #2b2d33;'>GÜNCEL İLANLAR</h1>", unsafe_allow_html=True)
     df = verileri_yukle()
-    ara = st.text_input("🔍 Kelime veya konum ile ara...")
     
     if not df.empty:
-        if ara:
-            df = df[df.apply(lambda row: row.astype(str).str.contains(ara, case=False).any(), axis=1)]
-        
         for i, r in df.iloc[::-1].iterrows():
-            img_path = r['Foto_Yolu'] if str(r['Foto_Yolu']) != 'nan' and os.path.exists(str(r['Foto_Yolu'])) else "https://via.placeholder.com/240x180?text=Goruntu+Yok"
+            # Görseli Base64 formatına çevirerek HTML içine gömüyoruz
+            img_path = str(r['Foto_Yolu'])
+            if img_path != 'nan' and os.path.exists(img_path):
+                encoded_img = get_base64_of_bin_file(img_path)
+                display_img = f"data:image/jpeg;base64,{encoded_img}"
+            else:
+                display_img = "https://via.placeholder.com/240x180?text=Goruntu+Yok"
             
-            # Kart Yapısı
+            # Kart Yapısı (Görsel sadece img-container içinde)
             st.markdown(f"""
             <div class="property-card">
                 <div class="img-container">
-                    <img src="data:image/png;base64," class="thumb-img" id="img_{r['ID']}">
+                    <img src="{display_img}" class="thumb-img">
                 </div>
                 <div class="info-container">
                     <div>
@@ -152,13 +145,8 @@ elif secim == "🏠 İlan Listesi":
                 </div>
             </div>
             """, unsafe_allow_html=True)
-            # Resim streamlit üzerinden gösteriliyor (Local dosya erişimi için)
-            with st.container():
-                cols = st.columns([1.5, 3])
-                with cols[0]:
-                    st.image(img_path, use_container_width=True)
-                with cols[1]:
-                    st.empty() # Düzeni korumak için
+    else:
+        st.info("Henüz ilan eklenmemiş.")
 
 # 6. YÖNETİCİ PANELİ
 elif secim == "🔐 Yönetici Girişi":
