@@ -70,8 +70,9 @@ if not st.session_state.logged_in:
         st.image(LOGO_URL, use_container_width=True)
         tab1, tab2 = st.tabs(["🔐 Giriş Yap", "📝 Personel Kaydı"])
         with tab1:
-            u_name = st.text_input("Kullanıcı Adı")
-            u_pass = st.text_input("Şifre", type="password")
+            # KEY EKLENDİ
+            u_name = st.text_input("Kullanıcı Adı", key="login_user")
+            u_pass = st.text_input("Şifre", type="password", key="login_pass")
             if st.button("Sisteme Giriş", use_container_width=True):
                 if u_name == "admin" and u_pass == "3363Garanti":
                     st.session_state.logged_in, st.session_state.user_type, st.session_state.username = True, "Yönetici", "admin"
@@ -87,8 +88,9 @@ if not st.session_state.logged_in:
                     else: st.error("Giriş bilgileri hatalı!")
         with tab2:
             st.info("Yeni personel hesabı.")
-            new_u = st.text_input("Kullanıcı Adı")
-            new_p = st.text_input("Şifre", type="password")
+            # KEY EKLENDİ (HATAYI VEREN YER BURASIYDI)
+            new_u = st.text_input("Kullanıcı Adı", key="register_user")
+            new_p = st.text_input("Şifre", type="password", key="register_pass")
             if st.button("Kayıt Ol", use_container_width=True):
                 users = verileri_yukle(USER_FILE, ["Kullanici", "Sifre", "Yetki"])
                 if new_u and new_p:
@@ -107,8 +109,8 @@ else:
         st.write(f"👤 **{st.session_state.username} ({st.session_state.user_type})**")
         st.divider()
         
-        # ÖZELLİK 1: İLAN ARAMA (SİDEBARDA)
-        search_query = st.text_input("🔍 İlan Ara (No veya Başlık)", placeholder="Örn: 123456")
+        # KEY EKLENDİ
+        search_query = st.text_input("🔍 İlan Ara (No veya Başlık)", placeholder="Örn: 123456", key="main_search")
         
         st.divider()
         menu_items = {
@@ -126,7 +128,7 @@ else:
             st.session_state.logged_in = False
             st.rerun()
 
-    # ARAMA SONUCUNU GÖSTER (EĞER ARAMA YAPILDIYSA)
+    # ARAMA SONUCU
     if search_query:
         st.title(f"🔎 '{search_query}' İçin Sonuçlar")
         results = df_all[
@@ -200,7 +202,7 @@ else:
                 pd.concat([df_all, pd.DataFrame([yeni])]).to_csv(DB_FILE, index=False)
                 st.success(f"İlan {yeni['P_No']} no ile eklendi!")
 
-    # 4. RANDEVULAR (NOT ÖZELLİĞİ EKLENDİ)
+    # 4. RANDEVULAR
     elif secim == "randevu":
         st.title("📅 Randevu Takvimi")
         r_df = verileri_yukle(RANDEVU_FILE, ["Ekleyen", "Tarih", "Saat", "Musteri", "Ilan_No", "Notlar"])
@@ -210,13 +212,12 @@ else:
                 d = st.date_input("Gün"); s = st.time_input("Saat"); m = st.text_input("Müşteri")
                 ilan_sec = [f"{row['P_No']} - {row['Baslik']}" for _, row in df_all.iterrows()]
                 secilen = st.selectbox("İlgili Portföy", ilan_sec)
-                # ÖZELLİK 2: NOT ALANI
                 n = st.text_area("Randevu Notları", placeholder="Müşteri pazarlığa açık, kredi bekliyor vb.")
                 
                 if st.form_submit_button("Randevuyu Kaydet"):
                     y_r = pd.DataFrame([{"Ekleyen": st.session_state.username, "Tarih": str(d), "Saat": str(s), "Musteri": m, "Ilan_No": secilen.split(" - ")[0], "Notlar": n}])
                     pd.concat([r_df, y_r]).to_csv(RANDEVU_FILE, index=False)
-                    st.success("Randevu notuyla birlikte kaydedildi!")
+                    st.success("Randevu kaydedildi!")
                     st.rerun()
         
         display_r = r_df if st.session_state.user_type == "Yönetici" else r_df[r_df['Ekleyen'] == st.session_state.username]
