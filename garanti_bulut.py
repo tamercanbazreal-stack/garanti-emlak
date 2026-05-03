@@ -1,5 +1,4 @@
 import streamlit as st
-import pd as pd
 import pandas as pd
 from datetime import datetime
 import os
@@ -43,7 +42,7 @@ def format_para(sayi):
         return f"{int(temiz):,}".replace(",", ".")
     except: return sayi
 
-# 3. TASARIM
+# 3. TASARIM (CSS)
 st.markdown("""
     <style>
     .property-card {
@@ -76,7 +75,7 @@ if 'logged_in' not in st.session_state:
 if 'show_detail' not in st.session_state:
     st.session_state.show_detail = {}
 
-# --- GİRİŞ VE KAYIT ---
+# --- GİRİŞ VE KAYIT EKRANI ---
 if not st.session_state.logged_in:
     c1, c2, c3 = st.columns([1, 1.5, 1])
     with c2:
@@ -93,7 +92,9 @@ if not st.session_state.logged_in:
                     users = verileri_yukle(USER_FILE, ["Kullanici", "Sifre", "Yetki"])
                     user_match = users[(users['Kullanici'] == u_name) & (users['Sifre'] == make_hashes(u_pass))]
                     if not user_match.empty:
-                        st.session_state.logged_in, st.session_state.user_type, st.session_state.username = True, user_match.iloc[0]['Yetki'], u_name
+                        st.session_state.logged_in = True
+                        st.session_state.user_type = user_match.iloc[0]['Yetki']
+                        st.session_state.username = u_name
                         st.rerun()
                     else: st.error("Hatalı Giriş!")
         with tab2:
@@ -112,6 +113,7 @@ else:
 
     with st.sidebar:
         st.image(LOGO_URL, use_container_width=True)
+        # Personel adının yanında yetkisi yazıyor
         st.write(f"👤 **{st.session_state.username} ({st.session_state.user_type})**")
         search_query = st.text_input("🔍 İlan No Ara", key="side_search")
         st.divider()
@@ -122,7 +124,7 @@ else:
             st.session_state.logged_in = False
             st.rerun()
 
-    # ARAMA EKRANI
+    # ARAMA SONUÇLARI
     if search_query:
         st.title("🔎 Arama Sonuçları")
         kendi_idleri = df_all[df_all['Sahip'] == st.session_state.username]['ID'].tolist()
@@ -138,7 +140,7 @@ else:
             if st.session_state.show_detail.get(detay_key):
                 st.markdown(f'<div class="detail-box"><b>📝 İLAN NOTLARI:</b><br>{r["Aciklama"]}</div>', unsafe_allow_html=True)
 
-    # 1. PORTFÖYÜM
+    # 1. BENİM PORTFÖYÜM
     if secim == "portfoy":
         st.title("📂 Benim Portföyüm")
         kendi_df = df_all[df_all['Sahip'] == st.session_state.username]
@@ -161,7 +163,7 @@ else:
             
             with c3:
                 with st.expander("🔗 Paylaş"):
-                    target = st.selectbox("Personel:", [u for u in verileri_yukle(USER_FILE, ["Kullanici"])['Kullanici'] if u != st.session_state.username], key=f"sel_{r['ID']}")
+                    target = st.selectbox("Personel Seç:", [u for u in verileri_yukle(USER_FILE, ["Kullanici"])['Kullanici'] if u != st.session_state.username], key=f"sel_{r['ID']}")
                     if st.button("Gönder", key=f"snd_{r['ID']}"):
                         pd.concat([pay_all, pd.DataFrame([{"IlanID": r['ID'], "Paylasan": st.session_state.username, "Paylasilan": target}])]).to_csv(SHARED_FILE, index=False)
                         st.success("Gönderildi!")
@@ -196,34 +198,41 @@ else:
                 if st.session_state.show_detail.get(detay_key):
                     st.markdown(f'<div class="detail-box"><b>📝 İLAN NOTLARI:</b><br>{r["Aciklama"]}</div>', unsafe_allow_html=True)
 
-    # 3. EKLE
+    # 3. YENİ İLAN EKLE
     elif secim == "ekle":
-        st.title("➕ Yeni İlan")
+        st.title("➕ Yeni İlan Kaydı")
         with st.form("add"):
-            b = st.text_input("İlan Başlığı"); f = st.text_input("Fiyat"); k = st.text_input("Konum"); a = st.text_area("İlan Notu")
-            if st.form_submit_button("Kaydet"):
+            b = st.text_input("İlan Başlığı")
+            f = st.text_input("Fiyat")
+            k = st.text_input("Konum")
+            a = st.text_area("İlan Notu / Açıklama")
+            if st.form_submit_button("Sisteme Kaydet"):
                 yeni = {"ID": datetime.now().strftime("%Y%m%d%H%M%S"), "P_No": portfoy_no_uret(), "Sahip": st.session_state.username, "Tarih": datetime.now().strftime("%d/%m/%Y"), "Baslik": b, "Fiyat": format_para(f), "Konum": k, "Aciklama": a}
                 pd.concat([df_all, pd.DataFrame([yeni])]).to_csv(DB_FILE, index=False)
-                st.success("İlan Eklendi!")
+                st.success(f"İlan {yeni['P_No']} numarasıyla kaydedildi!")
 
-    # 4. RANDEVU
+    # 4. RANDEVULAR (Sadece Kendi Aktif İlanları)
     elif secim == "randevu":
-        st.title("📅 Randevular")
+        st.title("📅 Randevu Takvimi")
         r_df = verileri_yukle(RANDEVU_FILE, ["Ekleyen", "Tarih", "Saat", "Musteri", "Ilan_No", "Notlar"])
         kendi_ilanlarim = df_all[df_all['Sahip'] == st.session_state.username]
+        
         with st.expander("➕ Yeni Randevu"):
-            if kendi_ilanlarim.empty: st.warning("İlanınız yok.")
+            if kendi_ilanlarim.empty: st.warning("İlanınız bulunmadığı için randevu alamazsınız.")
             else:
                 with st.form("r"):
-                    d = st.date_input("Gün"); s = st.time_input("Saat"); m = st.text_input("Müşteri")
-                    p = st.selectbox("İlan No", [f"{row['P_No']} - {row['Baslik']}" for _, row in kendi_ilanlarim.iterrows()])
+                    d = st.date_input("Randevu Günü")
+                    s = st.time_input("Saat")
+                    m = st.text_input("Müşteri Adı")
+                    p = st.selectbox("İlgili İlan", [f"{row['P_No']} - {row['Baslik']}" for _, row in kendi_ilanlarim.iterrows()])
                     n = st.text_area("Notlar")
-                    if st.form_submit_button("Kaydet"):
+                    if st.form_submit_button("Randevuyu Kaydet"):
                         pd.concat([r_df, pd.DataFrame([{"Ekleyen": st.session_state.username, "Tarih": str(d), "Saat": str(s), "Musteri": m, "Ilan_No": p.split(" - ")[0], "Notlar": n}])]).to_csv(RANDEVU_FILE, index=False)
+                        st.success("Randevu başarıyla eklendi!")
                         st.rerun()
         st.table(r_df[r_df['Ekleyen'] == st.session_state.username])
 
-    # 5. ADMIN
-    elif secim == "admin":
-        st.title("⚙️ Personel Listesi")
+    # 5. ADMIN PANELİ
+    elif secim == "admin" and st.session_state.user_type == "Yönetici":
+        st.title("⚙️ Admin - Personel Yönetimi")
         st.table(verileri_yukle(USER_FILE, ["Kullanici", "Yetki"]))
