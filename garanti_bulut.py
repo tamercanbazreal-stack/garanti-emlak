@@ -54,25 +54,46 @@ st.markdown("""
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'show_detail' not in st.session_state: st.session_state.show_detail = {}
 
-# --- GİRİŞ EKRANI ---
+# --- GİRİŞ / KAYIT EKRANI ---
 if not st.session_state.logged_in:
     c1, c2, c3 = st.columns([1, 1.5, 1])
     with c2:
         st.image(LOGO_URL, use_container_width=True)
-        u_name = st.text_input("Kullanıcı Adı")
-        u_pass = st.text_input("Şifre", type="password")
-        if st.button("Sisteme Giriş", use_container_width=True):
-            if u_name == "admin" and u_pass == "3363Garanti":
-                st.session_state.logged_in, st.session_state.user_type, st.session_state.username = True, "Yönetici", "admin"
-                st.rerun()
-            else:
-                users = verileri_yukle(USER_FILE, ["Kullanici", "Sifre", "Yetki", "CanAdd"])
-                user_match = users[(users['Kullanici'] == u_name) & (users['Sifre'] == make_hashes(u_pass))]
-                if not user_match.empty:
-                    st.session_state.logged_in, st.session_state.user_type, st.session_state.username = True, user_match.iloc[0]['Yetki'], u_name
-                    st.session_state.can_add = str(user_match.iloc[0]['CanAdd']) == "True"
+        tab1, tab2 = st.tabs(["🔑 Giriş Yap", "📝 Üye Ol"])
+        
+        with tab1:
+            u_name = st.text_input("Kullanıcı Adı", key="login_user")
+            u_pass = st.text_input("Şifre", type="password", key="login_pass")
+            if st.button("Sisteme Giriş", use_container_width=True):
+                if u_name == "admin" and u_pass == "3363Garanti":
+                    st.session_state.logged_in, st.session_state.user_type, st.session_state.username = True, "Yönetici", "admin"
                     st.rerun()
-                else: st.error("Hatalı Giriş Bilgileri!")
+                else:
+                    users = verileri_yukle(USER_FILE, ["Kullanici", "Sifre", "Yetki", "CanAdd"])
+                    user_match = users[(users['Kullanici'] == u_name) & (users['Sifre'] == make_hashes(u_pass))]
+                    if not user_match.empty:
+                        st.session_state.logged_in, st.session_state.user_type, st.session_state.username = True, user_match.iloc[0]['Yetki'], u_name
+                        st.rerun()
+                    else: st.error("Hatalı Giriş Bilgileri!")
+        
+        with tab2:
+            new_user = st.text_input("Yeni Kullanıcı Adı", key="reg_user")
+            new_pass = st.text_input("Yeni Şifre", type="password", key="reg_pass")
+            confirm_pass = st.text_input("Şifre Tekrar", type="password", key="reg_pass_conf")
+            
+            if st.button("Kayıt Ol", use_container_width=True):
+                users = verileri_yukle(USER_FILE, ["Kullanici", "Sifre", "Yetki", "CanAdd"])
+                if not new_user or not new_pass:
+                    st.warning("Lütfen tüm alanları doldurun.")
+                elif new_pass != confirm_pass:
+                    st.error("Şifreler uyuşmuyor!")
+                elif new_user in users['Kullanici'].values or new_user == "admin":
+                    st.error("Bu kullanıcı adı zaten alınmış.")
+                else:
+                    # Yeni üyeler artık varsayılan olarak İlan Ekleme yetkisi AÇIK (True) gelir.
+                    new_data = {"Kullanici": new_user, "Sifre": make_hashes(new_pass), "Yetki": "Danışman", "CanAdd": True}
+                    pd.concat([users, pd.DataFrame([new_data])]).to_csv(USER_FILE, index=False)
+                    st.success("Kayıt Başarılı! Giriş yapabilirsiniz.")
 
 # --- ANA PANEL ---
 else:
@@ -87,8 +108,19 @@ else:
         st.divider()
         
         menu_items = {"📋 Portföyüm": "portfoy", "🔗 Gelenler": "paylasilan"}
-        if st.session_state.user_type == "Yönetici" or st.session_state.get('can_add', False):
+        
+        # Yetki Kontrolü
+        can_user_add = False
+        if st.session_state.user_type == "Yönetici":
+            can_user_add = True
+        else:
+            current_user_row = users_df[users_df['Kullanici'] == st.session_state.username]
+            if not current_user_row.empty:
+                can_user_add = str(current_user_row.iloc[0]['CanAdd']) == "True"
+
+        if can_user_add:
             menu_items["➕ İlan Ekle"] = "ekle"
+            
         menu_items["📅 Randevular"] = "randevu"
         if st.session_state.user_type == "Yönetici":
             menu_items["🌐 Şirket Portföyü"] = "all_port"
@@ -149,16 +181,15 @@ else:
             a = st.text_area("Notlar *")
             if st.form_submit_button("Portföye Ekle"):
                 if not b or not f or not k or not a:
-                    st.error("⚠️ Boş ilan eklenemez! Lütfen tüm alanları doldurun.")
+                    st.error("⚠️ Lütfen tüm alanları doldurun.")
                 else:
                     yeni = {"ID": datetime.now().strftime("%Y%m%d%H%M%S"), "P_No": portfoy_no_uret(), "Sahip": st.session_state.username, "Tarih": datetime.now().strftime("%d/%m/%Y"), "Baslik": b, "Fiyat": format_para(f), "Konum": k, "Aciklama": a}
                     pd.concat([df_all, pd.DataFrame([yeni])]).to_csv(DB_FILE, index=False)
-                    st.success(f"✅ İlan Portföye Eklendi! NO: {yeni['P_No']}")
+                    st.success(f"✅ İlan Eklendi! NO: {yeni['P_No']}")
 
     elif secim == "randevu":
         st.title("📅 Randevu Yönetimi")
         r_df = verileri_yukle(RANDEVU_FILE, ["ID", "Ekleyen", "Tarih", "Saat", "Musteri", "Ilan_No", "Notlar"])
-        
         with st.expander("➕ Yeni Randevu Kaydı"):
             with st.form("r_form", clear_on_submit=True):
                 d = st.date_input("Randevu Günü")
@@ -170,40 +201,24 @@ else:
                     r_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
                     yeni_r = {"ID": r_id, "Ekleyen": st.session_state.username, "Tarih": str(d), "Saat": str(s), "Musteri": m, "Ilan_No": p_secim.split(" - ")[0], "Notlar": n}
                     pd.concat([r_df, pd.DataFrame([yeni_r])]).to_csv(RANDEVU_FILE, index=False)
-                    st.success("Randevu başarıyla eklendi!")
+                    st.success("Randevu eklendi!")
                     st.rerun()
-        
         st.divider()
-        
-        # Filtreleme
         gosterilecek_r = r_df if st.session_state.user_type == "Yönetici" else r_df[r_df['Ekleyen'] == st.session_state.username]
-
         if gosterilecek_r.empty:
             st.info("Kayıtlı randevu bulunamadı.")
         else:
             for idx, row in gosterilecek_r.iloc[::-1].iterrows():
-                # Her randevu için benzersiz bir kutu
-                st.markdown(f"""
-                <div class="appointment-card">
-                    <b>📅 Tarih: {row['Tarih']} | ⏰ Saat: {row['Saat']}</b><br>
-                    👤 Müşteri: {row['Musteri']} <br>
-                    🏠 İlan No: {row['Ilan_No']} <br>
-                    📝 Notlar: {row['Notlar']} <br>
-                    {f'✍️ Ekleyen: {row["Ekleyen"]}' if st.session_state.user_type == "Yönetici" else ''}
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # SADECE SEÇİLENİ SİL: ID üzerinden filtreleme yapar
+                st.markdown(f"""<div class="appointment-card"><b>📅 {row['Tarih']} | ⏰ {row['Saat']}</b><br>👤 Müşteri: {row['Musteri']} <br>🏠 İlan No: {row['Ilan_No']} <br>📝 Notlar: {row['Notlar']} <br>{f'✍️ Ekleyen: {row["Ekleyen"]}' if st.session_state.user_type == "Yönetici" else ''}</div>""", unsafe_allow_html=True)
                 if st.button("🗑️ Bu Randevuyu Sil", key=f"r_del_{row['ID']}_{idx}"):
-                    # r_df'in içinden sadece bu ID'ye sahip olmayanı tut (yani seçileni çıkar)
                     yeni_r_df = r_df[r_df['ID'].astype(str) != str(row['ID'])]
                     yeni_r_df.to_csv(RANDEVU_FILE, index=False)
-                    st.success("Randevu başarıyla silindi.")
+                    st.success("Silindi.")
                     st.rerun()
 
     elif secim == "admin":
         st.title("⚙️ Yönetici Paneli")
-        st.subheader("👥 Personel Yetkileri")
+        st.subheader("👥 Personel Yönetimi")
         for idx, row in users_df.iterrows():
             if row['Kullanici'] != "admin":
                 c1, c2, c3 = st.columns([2, 2, 1])
