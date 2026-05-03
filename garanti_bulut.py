@@ -61,8 +61,9 @@ st.markdown("""
         display: inline-block; margin-bottom: 10px;
     }
     .detail-box {
-        background: #f9f9f9; padding: 15px; border-radius: 8px;
-        border: 1px dashed #ccc; margin-top: 10px; margin-bottom: 15px;
+        background: #f1f1f1; padding: 15px; border-radius: 8px;
+        border: 1px solid #ddd; margin-top: 10px; margin-bottom: 15px;
+        color: #333;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -70,7 +71,6 @@ st.markdown("""
 # 4. OTURUM YÖNETİMİ
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
-# Detay butonlarının durumunu tutmak için
 if 'show_detail' not in st.session_state:
     st.session_state.show_detail = {}
 
@@ -91,16 +91,18 @@ if not st.session_state.logged_in:
                     users = verileri_yukle(USER_FILE, ["Kullanici", "Sifre", "Yetki"])
                     user_match = users[(users['Kullanici'] == u_name) & (users['Sifre'] == make_hashes(u_pass))]
                     if not user_match.empty:
-                        st.session_state.logged_in, st.session_state.user_type, st.session_state.username = True, user_match.iloc[0]['Yetki'], u_name
+                        st.session_state.logged_in = True
+                        st.session_state.user_type = user_match.iloc[0]['Yetki']
+                        st.session_state.username = u_name
                         st.rerun()
-                    else: st.error("Hatalı Giriş!")
+                    else: st.error("Hatalı Bilgi!")
         with tab2:
             new_u = st.text_input("Kullanıcı Adı", key="reg_u")
             new_p = st.text_input("Şifre", type="password", key="reg_p")
             if st.button("Kayıt Ol"):
                 users = verileri_yukle(USER_FILE, ["Kullanici", "Sifre", "Yetki"])
                 pd.concat([users, pd.DataFrame([{"Kullanici": new_u, "Sifre": make_hashes(new_p), "Yetki": "Danışman"}])]).to_csv(USER_FILE, index=False)
-                st.success("Kayıt Başarılı!")
+                st.success("Kaydedildi!")
 
 # --- ANA PANEL ---
 else:
@@ -110,7 +112,8 @@ else:
 
     with st.sidebar:
         st.image(LOGO_URL, use_container_width=True)
-        st.write(f"👤 **{st.session_state.username}**")
+        # YENİLİK: ADIN YANINDA YETKİ YAZIYOR
+        st.write(f"👤 **{st.session_state.username} ({st.session_state.user_type})**")
         search_query = st.text_input("🔍 İlan No Ara", key="side_search")
         st.divider()
         menu = {"📋 Portföy": "portfoy", f"🔗 Gelenler ({gelen_sayi})": "paylasilan", "➕ Ekle": "ekle", "📅 Randevu": "randevu"}
@@ -129,22 +132,21 @@ else:
         
         for _, r in results.iterrows():
             st.markdown(f'<div class="property-card"><div class="p-no-big">NO: {r["P_No"]}</div><br><b>{r["Baslik"]}</b></div>', unsafe_allow_html=True)
-            detay_key = f"search_det_{r['ID']}"
-            if st.button("Detayları Kapat" if st.session_state.show_detail.get(detay_key) else "Detayları Gör", key=detay_key):
+            detay_key = f"src_det_{r['ID']}"
+            if st.button("Kapat" if st.session_state.show_detail.get(detay_key) else "🔍 Detay", key=detay_key):
                 st.session_state.show_detail[detay_key] = not st.session_state.show_detail.get(detay_key)
                 st.rerun()
             if st.session_state.show_detail.get(detay_key):
-                st.markdown(f'<div class="detail-box"><b>📍 Konum:</b> {r["Konum"]}<br><b>💰 Fiyat:</b> {r["Fiyat"]} TL<br><b>📝 Not:</b> {r["Aciklama"]}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="detail-box"><b>💰 Fiyat:</b> {r["Fiyat"]} TL<br><b>📍 Konum:</b> {r["Konum"]}<br><hr><b>📝 NOT:</b><br>{r["Aciklama"]}</div>', unsafe_allow_html=True)
 
     # 1. PORTFÖYÜM
     if secim == "portfoy":
         st.title("📂 Benim Portföyüm")
         kendi_df = df_all[df_all['Sahip'] == st.session_state.username]
         for i, r in kendi_df.iloc[::-1].iterrows():
-            st.markdown(f'<div class="property-card"><div class="p-no-big">NO: {r["P_No"]}</div><br><b>{r["Baslik"]}</b></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="property-card"><div class="p-no-big">NO: {r["P_No"]}</div><br><b>{r["Baslik"]}</b> | <span style="color:green;">{r["Fiyat"]} TL</span></div>', unsafe_allow_html=True)
             
             c1, c2, c3 = st.columns([1, 1, 2])
-            # DETAY BUTONU MANTIĞI
             detay_key = f"my_det_{r['ID']}"
             if c1.button("Kapat" if st.session_state.show_detail.get(detay_key) else "🔍 Detay", key=detay_key):
                 st.session_state.show_detail[detay_key] = not st.session_state.show_detail.get(detay_key)
@@ -156,13 +158,13 @@ else:
             
             with c3:
                 with st.expander("🔗 Paylaş"):
-                    target = st.selectbox("Personel:", [u for u in verileri_yukle(USER_FILE, ["Kullanici"])['Kullanici'] if u != st.session_state.username], key=f"sel_{r['ID']}")
+                    target = st.selectbox("Gönderilecek Kişi:", [u for u in verileri_yukle(USER_FILE, ["Kullanici"])['Kullanici'] if u != st.session_state.username], key=f"sel_{r['ID']}")
                     if st.button("Gönder", key=f"snd_{r['ID']}"):
                         pd.concat([pay_all, pd.DataFrame([{"IlanID": r['ID'], "Paylasan": st.session_state.username, "Paylasilan": target}])]).to_csv(SHARED_FILE, index=False)
-                        st.success("İletildi!")
+                        st.success("Gönderildi!")
 
             if st.session_state.show_detail.get(detay_key):
-                st.markdown(f'<div class="detail-box"><b>📍 Konum:</b> {r["Konum"]}<br><b>💰 Fiyat:</b> {r["Fiyat"]} TL<br><b>📝 Açıklama:</b> {r["Aciklama"]}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="detail-box"><b>📍 Konum:</b> {r["Konum"]}<br><hr><b>📝 NOT (AÇIKLAMA):</b><br>{r["Aciklama"]}</div>', unsafe_allow_html=True)
 
     # 2. PAYLAŞILANLAR
     elif secim == "paylasilan":
@@ -172,7 +174,7 @@ else:
             r = df_all[df_all['ID'].astype(str) == str(p_row['IlanID'])]
             if not r.empty:
                 r = r.iloc[0]
-                st.markdown(f'<div class="share-card"><div class="p-no-big">NO: {r["P_No"]}</div><br><b>{r["Baslik"]}</b> | 👤 {p_row["Paylasan"]}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="share-card"><div class="p-no-big">NO: {r["P_No"]}</div><br><b>{r["Baslik"]}</b> | 👤 Gönderen: {p_row["Paylasan"]}</div>', unsafe_allow_html=True)
                 
                 c1, c2 = st.columns([1, 1])
                 detay_key = f"sh_det_{r['ID']}"
@@ -185,31 +187,31 @@ else:
                     st.rerun()
                 
                 if st.session_state.show_detail.get(detay_key):
-                    st.markdown(f'<div class="detail-box"><b>💰 Fiyat:</b> {r["Fiyat"]} TL<br><b>📍 Konum:</b> {r["Konum"]}<br><b>📝 Not:</b> {r["Aciklama"]}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="detail-box"><b>💰 Fiyat:</b> {r["Fiyat"]} TL<br><b>📍 Konum:</b> {r["Konum"]}<br><hr><b>📝 NOT:</b><br>{r["Aciklama"]}</div>', unsafe_allow_html=True)
 
     # 3. EKLE
     elif secim == "ekle":
         st.title("➕ Yeni İlan")
         with st.form("add"):
-            b = st.text_input("Başlık"); f = st.text_input("Fiyat"); k = st.text_input("Konum"); a = st.text_area("Açıklama")
-            if st.form_submit_button("Kaydet"):
+            b = st.text_input("İlan Başlığı"); f = st.text_input("Fiyat"); k = st.text_input("Konum"); a = st.text_area("İlan Notu / Açıklama")
+            if st.form_submit_button("Sisteme Kaydet"):
                 yeni = {"ID": datetime.now().strftime("%Y%m%d%H%M%S"), "P_No": portfoy_no_uret(), "Sahip": st.session_state.username, "Tarih": datetime.now().strftime("%d/%m/%Y"), "Baslik": b, "Fiyat": format_para(f), "Konum": k, "Aciklama": a}
                 pd.concat([df_all, pd.DataFrame([yeni])]).to_csv(DB_FILE, index=False)
-                st.success("İlan Eklendi!")
+                st.success("İlan başarıyla eklendi!")
 
     # 4. RANDEVU
     elif secim == "randevu":
-        st.title("📅 Randevu")
+        st.title("📅 Randevularım")
         r_df = verileri_yukle(RANDEVU_FILE, ["Ekleyen", "Tarih", "Saat", "Musteri", "Ilan_No", "Notlar"])
         kendi_ilanlarim = df_all[df_all['Sahip'] == st.session_state.username]
         
-        with st.expander("Yeni Randevu"):
-            if kendi_ilanlarim.empty: st.warning("İlanınız yok.")
+        with st.expander("➕ Yeni Randevu Oluştur"):
+            if kendi_ilanlarim.empty: st.warning("İlanınız bulunmadığı için randevu oluşturamazsınız.")
             else:
                 with st.form("r"):
-                    d = st.date_input("Gün"); s = st.time_input("Saat"); m = st.text_input("Müşteri")
-                    p = st.selectbox("Portföy", [f"{row['P_No']} - {row['Baslik']}" for _, row in kendi_ilanlarim.iterrows()])
-                    n = st.text_area("Notlar")
+                    d = st.date_input("Gün"); s = st.time_input("Saat"); m = st.text_input("Müşteri Adı")
+                    p = st.selectbox("İlgili İlan", [f"{row['P_No']} - {row['Baslik']}" for _, row in kendi_ilanlarim.iterrows()])
+                    n = st.text_area("Randevu Notu")
                     if st.form_submit_button("Kaydet"):
                         pd.concat([r_df, pd.DataFrame([{"Ekleyen": st.session_state.username, "Tarih": str(d), "Saat": str(s), "Musteri": m, "Ilan_No": p.split(" - ")[0], "Notlar": n}])]).to_csv(RANDEVU_FILE, index=False)
                         st.rerun()
@@ -217,4 +219,5 @@ else:
 
     # 5. ADMIN
     elif secim == "admin":
+        st.title("⚙️ Personel Yönetimi")
         st.table(verileri_yukle(USER_FILE, ["Kullanici", "Yetki"]))
